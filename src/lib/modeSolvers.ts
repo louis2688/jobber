@@ -108,6 +108,11 @@ export class ModeBags {
     spac: Dimension | null
     /** Bay index for rake / jack sequence (1-based). */
     rakeIndex: number
+    /**
+     * Which pitch drives jack/rake drop:
+     * 1 = primary (pitch), 2 = secondary (pitch2 / irregular).
+     */
+    jackSide: 1 | 2
   } = {
     pitch: null,
     pitch2: null,
@@ -117,6 +122,7 @@ export class ModeBags {
     deg: null,
     spac: null,
     rakeIndex: 0,
+    jackSide: 1,
   }
 
   clear(program: CalcProgram): void {
@@ -158,6 +164,7 @@ export class ModeBags {
         deg: null,
         spac: null,
         rakeIndex: 0,
+        jackSide: 1,
       }
     }
   }
@@ -536,9 +543,22 @@ function handleStairs(
   }
   if (key === 'clrtr') {
     solveStairs(s)
-    // 1st step height = riser (or FL-FL/steps)
+    // 1st step height = riser (or FL-FL/steps); tape notes unit rise/run summary
     const v = s.riserH ?? current
-    return { value: v, tape: `1stStp ${v.format(mode)}` }
+    const tread = s.trdWth
+    const nose = s.nose?.toInches() ?? 0
+    const stepsNote =
+      s.steps != null
+        ? `; ${s.steps} risers / ${Math.max(0, s.steps - 1)} treads`
+        : ''
+    const treadNote =
+      tread != null
+        ? `; tread ${tread.format(mode)}${nose > 0 ? ` − nose ${nose.toFixed(3)}"` : ''}`
+        : ''
+    return {
+      value: v,
+      tape: `1stStp ${v.format(mode)}${stepsNote}${treadNote}`,
+    }
   }
   if (key === 'slp') {
     solveStairs(s)
@@ -552,9 +572,13 @@ function handleStairs(
       }
     }
     const str = Math.hypot(rise, run)
+    // Rough headroom flag: steep stairs (>45°) often need careful clearance
+    const ang = run > 0 ? rad2deg(Math.atan(rise / run)) : 90
+    const headNote =
+      ang > 42 ? ` ⚠ steep ${ang.toFixed(1)}° — check headroom` : ''
     return {
       value: Dimension.fromInches(str),
-      tape: `stringr ${Dimension.fromInches(str).format(mode)}`,
+      tape: `stringr ${Dimension.fromInches(str).format(mode)}${headNote}`,
     }
   }
   if (key === 'dmsin') {
@@ -833,11 +857,13 @@ function handleTechnical(
 }
 
 /**
- * Roof helpers (practical MVP, not full Jobber parity):
+ * Roof helpers (MVP+ practical, not full Jobber Instruments clone):
  * - Regular HIP ≈ common slope × √2 (square plan, equal pitches)
  * - Irregular HIP/VALLEY: pitch + pitch2 + run on primary side,
  *   rise = run×p1/12; run2 = rise×12/p2; hip/val = √(run²+run2²+rise²)
  *   (same intersection length; secondary common = √(run2²+rise²))
+ * - After irregular HIP, press Rise → run2; press DEG (0) → toggle jack side
+ *   (primary pitch vs pitch2) for Rk-Up / Rk-Dn sequencing
  * - Jack length at bay n: common − n × spac × √(1+(p/12)²)
  *   Enter bay # then Rk-Up to jump; value returns jack when common known
  * - Rk-Up / Rk-Dn: plumb n × spac × (pitch/12); stops when jack ≤ 0
@@ -899,10 +925,20 @@ function handleRoof(
     if (r.pitch != null && Math.abs(r.pitch - p) > 1e-9) {
       // Second distinct pitch → irregular hip/valley support
       r.pitch2 = p
+      r.jackSide = 1
       return {
         value: Dimension.fromFeet(p),
         forceDec: true,
-        tape: `pitch2 ${p}/12 (irregular hip/val)`,
+        tape: `pitch2 ${p}/12 (irreg: pitch ${r.pitch}/12 + pitch2 — then Run → HIP)`,
+      }
+    }
+    // Same pitch again refreshes primary; clears stale pitch2 mismatch UX
+    if (r.pitch != null && Math.abs(r.pitch - p) <= 1e-9 && r.pitch2 != null) {
+      r.pitch = p
+      return {
+        value: Dimension.fromFeet(p),
+        forceDec: true,
+        tape: `pitch ${p}/12 (kept pitch2 ${r.pitch2}/12)`,
       }
     }
     r.pitch = p
@@ -913,7 +949,22 @@ function handleRoof(
     }
   }
   if (key === 'deg') {
-    const degIn = numFromDim(current, mode)
+    // With irregular plan ready: enter 0 then DEG toggles jack side (1↔2)
+    const raw = numFromDim(current, mode)
+    if (
+      r.pitch2 != null &&
+      r.pitch != null &&
+      current.isZero()
+    ) {
+      r.jackSide = r.jackSide === 1 ? 2 : 1
+      const p = r.jackSide === 2 ? r.pitch2 : r.pitch
+      return {
+        value: Dimension.fromFeet(p),
+        forceDec: true,
+        tape: `jack side ${r.jackSide} (pitch ${p}/12) — use Rk-Up/Rk-Dn`,
+      }
+    }
+    const degIn = raw
     // Accept packed DMS on DEG entry in roof mode
     r.deg = Math.abs(degIn) < 360 ? parseDmsInput(degIn) : degIn
     r.pitch = 12 * Math.tan(deg2rad(r.deg))
@@ -954,9 +1005,10 @@ function handleRoof(
     const irr = irregularPlan(r)
     if (irr) {
       r.rise = Dimension.fromInches(irr.rise)
+      r.jackSide = 1
       return {
         value: Dimension.fromInches(irr.hipVal),
-        tape: `HIP/VAL irr ${Dimension.fromInches(irr.hipVal).format(mode)} (run2 ${Dimension.fromInches(irr.run2).format(mode)}, SLP2 ${Dimension.fromInches(irr.common2).format(mode)})`,
+        tape: `HIP/VAL irr ${Dimension.fromInches(irr.hipVal).format(mode)} (p ${r.pitch}/12·p2 ${r.pitch2}/12; run2 ${Dimension.fromInches(irr.run2).format(mode)}; SLP2 ${Dimension.fromInches(irr.common2).format(mode)}; DEG 0=toggle jack side)`,
       }
     }
     if (!r.slope) throw new Error('Need Rise/Run or Pitch+Run')
@@ -995,9 +1047,29 @@ function handleRoof(
     if (r.pitch == null || !r.spac) throw new Error('Need pitch & Spac')
     const spac = r.spac.toInches()
     if (spac <= 0) throw new Error('Spac must be > 0')
-    const unit = (r.pitch / 12) * spac
-    const common = ensureRoofCommon(r)
-    const factor = Math.sqrt(1 + (r.pitch / 12) ** 2)
+
+    // Active pitch for this rake sequence (side 2 needs pitch2)
+    const activePitch =
+      r.jackSide === 2 && r.pitch2 != null ? r.pitch2 : r.pitch
+    if (activePitch == null) throw new Error('Need pitch')
+
+    const unit = (activePitch / 12) * spac
+    const factor = Math.sqrt(1 + (activePitch / 12) ** 2)
+
+    // Common length: primary SLP, or SLP2 when jacking secondary side
+    let commonIn: number | null = null
+    if (r.jackSide === 2 && r.pitch2 != null) {
+      const irr = irregularPlan(r)
+      if (irr) commonIn = irr.common2
+      else if (r.run) {
+        const rise = (r.pitch! / 12) * r.run.toInches()
+        const run2 = (rise * 12) / r.pitch2
+        commonIn = Math.hypot(run2, rise)
+      }
+    } else {
+      const common = ensureRoofCommon(r)
+      commonIn = common ? common.toInches() : null
+    }
 
     // Jump to bay: enter integer 1–48 in DEC, then Rk-Up (avoids treating jack lengths as bays)
     const raw = numFromDim(current, mode)
@@ -1020,28 +1092,38 @@ function handleRoof(
     const n = r.rakeIndex
     const plumb = n * unit
     let jackIn: number | null = null
-    if (common) {
+    if (commonIn != null) {
       const drop = n * spac * factor
-      jackIn = common.toInches() - drop
+      jackIn = commonIn - drop
       if (jackIn <= 0) {
         r.rakeIndex = Math.max(1, n - 1)
         throw new Error(`Jack ≤ 0 at bay #${n} (last #${r.rakeIndex})`)
       }
     }
 
+    const sideNote = r.jackSide === 2 ? ' side2' : ''
     if (jackIn != null) {
       return {
         value: Dimension.fromInches(jackIn),
-        tape: `${label} #${n} jack ${Dimension.fromInches(jackIn).format(mode)} (plumb ${Dimension.fromInches(Math.abs(plumb)).format(mode)})`,
+        tape: `${label} #${n}${sideNote} jack ${Dimension.fromInches(jackIn).format(mode)} (plumb ${Dimension.fromInches(Math.abs(plumb)).format(mode)}; p ${activePitch}/12)`,
       }
     }
     return {
       value: Dimension.fromInches(Math.abs(plumb)),
-      tape: `${label} #${n} plumb ${Dimension.fromInches(Math.abs(plumb)).format(mode)} (enter SLP/common for jack)`,
+      tape: `${label} #${n}${sideNote} plumb ${Dimension.fromInches(Math.abs(plumb)).format(mode)} (enter SLP/common for jack)`,
     }
   }
 
-  if (key === 'run' && r.run) return { value: r.run, tape: `Run <- ${current.format(mode)}` }
+  if (key === 'run' && r.run) {
+    const irr = irregularPlan(r)
+    if (irr) {
+      return {
+        value: r.run,
+        tape: `Run <- ${current.format(mode)} (irreg ready: HIP → length; Rise → run2)`,
+      }
+    }
+    return { value: r.run, tape: `Run <- ${current.format(mode)}` }
+  }
 
   return { value: current, tape: label }
 }

@@ -7,14 +7,14 @@
   xsi:type="TaskPaneApp">
 
   <Id>8f3c2a1b-4d5e-6f70-8a9b-0c1d2e3f4a5c</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.1.0.0</Version>
   <ProviderName>Jobber Calculator</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Jobber Construction Calculator (Prod)"/>
-  <Description DefaultValue="Construction calculator (FIS, triangle, roof, stairs) with Insert into Excel."/>
+  <Description DefaultValue="Construction calculator (FIS, triangle, roof, stairs). Insert value or tape/triangle table into the worksheet."/>
   <IconUrl DefaultValue="https://jobberlm.vercel.app/excel/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://jobberlm.vercel.app/excel/assets/icon-80.png"/>
-  <SupportUrl DefaultValue="https://jobberlm.vercel.app/excel/"/>
+  <SupportUrl DefaultValue="https://jobberlm.vercel.app/"/>
   <AppDomains>
     <AppDomain>https://jobberlm.vercel.app</AppDomain>
   </AppDomains>
@@ -75,7 +75,7 @@
         <bt:Image id="Icon.80" DefaultValue="https://jobberlm.vercel.app/excel/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://jobberlm.vercel.app/excel/"/>
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://jobberlm.vercel.app/"/>
         <bt:Url id="Commands.Url" DefaultValue="https://jobberlm.vercel.app/excel/commands.html"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://jobberlm.vercel.app/excel/index.html"/>
       </bt:Urls>
@@ -85,8 +85,8 @@
         <bt:String id="TaskpaneButton.Label" DefaultValue="Jobber Calc"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Open the Jobber construction calculator task pane."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open the Jobber calculator"/>
+        <bt:String id="GetStarted.Description" DefaultValue="Open Jobber Calc to compute FIS lengths and insert values or tables into Excel."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open Jobber construction calculator (Insert value / Insert table)"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

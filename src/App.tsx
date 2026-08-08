@@ -1,8 +1,15 @@
-import { lazy, Suspense, useReducer, useState } from 'react'
+import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import { Display } from './components/Display.tsx'
 import { Keypad, type KeyAction } from './components/Keypad.tsx'
 import { CalcEngine } from './lib/engine.ts'
 import { nextProgram, PROGRAM_TITLE, type CalcProgram } from './lib/programs.ts'
+import {
+  applyPersistState,
+  capturePersistState,
+  loadPersistState,
+  savePersistState,
+} from './lib/persist.ts'
 import './styles/calculator.css'
 
 const ExportButton = lazy(() =>
@@ -12,7 +19,16 @@ const ExportButton = lazy(() =>
 )
 
 function createEngine() {
-  return new CalcEngine()
+  const engine = new CalcEngine()
+  const saved = typeof localStorage !== 'undefined' ? loadPersistState() : null
+  if (saved) {
+    try {
+      applyPersistState(engine, saved)
+    } catch {
+      // corrupt persist blob — start fresh
+    }
+  }
+  return engine
 }
 
 type State = { engine: CalcEngine; tick: number; program: CalcProgram }
@@ -76,13 +92,20 @@ function reducer(state: State, action: KeyAction): State {
 }
 
 export default function App() {
-  const [state, dispatch] = useReducer(reducer, undefined, () => ({
-    engine: createEngine(),
-    program: 'triangle' as CalcProgram,
-    tick: 0,
-  }))
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const engine = createEngine()
+    return {
+      engine,
+      program: engine.program,
+      tick: 0,
+    }
+  })
   const [helpOpen, setHelpOpen] = useState(false)
   const snap = state.engine.getSnapshot()
+
+  useEffect(() => {
+    savePersistState(capturePersistState(state.engine))
+  }, [state.tick, state.engine, state.program])
 
   return (
     <div className="app-shell">
@@ -123,6 +146,20 @@ export default function App() {
         />
       </div>
 
+      <footer className="app-footer">
+        <a href="/docs/CHEATSHEET.md" target="_blank" rel="noreferrer">
+          Field cheat sheet
+        </a>
+        <span aria-hidden="true">·</span>
+        <a
+          href="https://github.com/louis2688/jobber"
+          target="_blank"
+          rel="noreferrer"
+        >
+          GitHub
+        </a>
+      </footer>
+
       <div className="fab-export">
         <Suspense fallback={null}>
           <ExportButton
@@ -161,12 +198,21 @@ export default function App() {
               Yellow keys change with each mode. Current:{' '}
               <b>{PROGRAM_TITLE[state.program]}</b>
             </p>
+            <p>
+              Field steps:{' '}
+              <a href="/docs/CHEATSHEET.md" target="_blank" rel="noreferrer">
+                cheat sheet
+              </a>
+            </p>
             <button type="button" onClick={() => setHelpOpen(false)}>
               Close
             </button>
           </div>
         </div>
       ) : null}
+
+      {/* First-party / privacy-light — main web app only, not Excel iframe */}
+      <Analytics />
     </div>
   )
 }

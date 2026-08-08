@@ -14,10 +14,14 @@ npm run dev
 Open the Vite URL (usually http://127.0.0.1:5173/).
 
 ```bash
-npm test          # vitest
-npm run build     # web + excel-addin → dist/ and dist/excel/
-npm run preview   # serve dist locally
+npm test              # vitest
+npm run build         # web + excel-addin → dist/ and dist/excel/
+npm run preview       # serve dist locally
+npm run test:e2e:install   # once: download Chromium for Playwright
+npm run test:e2e           # build + Playwright smoke (needs browsers)
 ```
+
+Field steps: [docs/CHEATSHEET.md](docs/CHEATSHEET.md) (also linked in the app footer / Help).
 
 ## Modes how-to (inputs → keys → result)
 
@@ -120,13 +124,13 @@ npm run excel:dev       # HTTPS https://localhost:3000
 
 1. Accept the self-signed certificate for https://localhost:3000 in a browser.
 2. Sideload `excel-addin/manifest.xml` into Excel.
-3. Open **Jobber Calc** → **Insert into Excel**.
+3. Open **Jobber Calc** → **Insert value** or **Insert table**.
 
 ### Production sideload
 
 1. Confirm https://jobberlm.vercel.app/excel/ loads in a browser.
 2. Sideload `excel-addin/manifest.prod.xml` (same Mac/Windows steps as local).
-3. Open **Jobber Calc (Prod)** — pane loads from Vercel; **Insert into Excel** works inside desktop Excel.
+3. Open **Jobber Calc (Prod)** — pane loads from Vercel; **Insert value** / **Insert table** work inside desktop Excel.
 
 Full steps: [excel-addin/README.md](excel-addin/README.md).
 
@@ -163,10 +167,34 @@ If not linked yet (CLI `vercel git connect` may require the dashboard):
 3. Set production branch to `main`
 4. Save — next push to `main` triggers a production deploy
 
+## PWA / install
+
+The web build includes a web manifest + service worker (`vite-plugin-pwa`). On supported mobile browsers you can **Add to Home Screen**. Icons: `public/pwa-192.png`, `public/pwa-512.png`.
+
+## Persistence
+
+The App layer saves program, unit mode, 5-slot memory, and last triangle / roof / stairs bags to `localStorage` (`jobber-calc-v1`) via `src/lib/persist.ts` — CalcEngine stays free of storage I/O.
+
+## Analytics
+
+Optional privacy-light [Vercel Analytics](https://vercel.com/docs/analytics) (`@vercel/analytics`) is injected on the **main web app only** — not in the Excel task pane bundle.
+
+## Custom domain (optional)
+
+No custom domain is configured in-repo. To add one Louis owns:
+
+1. Vercel → [jobberlm](https://vercel.com/louis-madrigals-projects/jobberlm) → **Settings → Domains**
+2. Add the domain → follow DNS instructions (A/CNAME) at your registrar
+3. Wait for SSL · update Excel `manifest.prod.xml` AppDomains / URLs if the add-in should load from the new host
+
+## xlsx export dependency
+
+See [docs/XLSX.md](docs/XLSX.md) — left on `xlsx@0.18.5` (export-only, lazy); audit highs have no safe npm upgrade path yet.
+
 ## Known limitations
 
-- Roof HIP/VAL / jack / rake are practical MVPs (documented formulas), not full Jobber Instruments parity.
-- Irregular jack drop uses the primary pitch common; secondary-side jack sequence is not modeled separately.
+- Roof HIP/VAL / jack / rake are practical MVP+ helpers (documented formulas), not a full Jobber Instruments clone.
+- Irregular roofs: enter two pitches + run → HIP; `0`+DEG toggles jack side for Rk-Up/Rk-Dn (primary vs pitch2). Still not full Jobber jack tables.
 - Oblique SSA picks one valid solution and notes the ambiguous second B; it does not flip between both interactively.
 - FIS entry is Jobber-style 0–15 keypad (not a full QWERTY feet-inch parser).
 - No auth (public calculator).

@@ -56,11 +56,20 @@ button {
   color: #222;
   border-color: #f4c63f;
 }
+.insert-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
 .insert {
   background: linear-gradient(#5f9cc5, #396b9e) !important;
   border-color: #044062 !important;
   padding: 0.7rem !important;
-  font-size: 0.9rem !important;
+  font-size: 0.85rem !important;
+}
+.insert-table {
+  background: linear-gradient(#6a9e5f, #3d7a39) !important;
+  border-color: #2a5528 !important;
 }
 .status { margin: 0; font-size: 0.75rem; color: #aaa; }
 .hint { margin: 0; font-size: 0.65rem; color: #666; }

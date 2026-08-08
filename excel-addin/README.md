@@ -2,6 +2,8 @@
 
 Office.js task-pane add-in that reuses calculator math from `../src/lib` (Vite alias `@lib`).
 
+**Support / product URL:** [https://jobberlm.vercel.app/](https://jobberlm.vercel.app/)
+
 ## Prerequisites
 
 - Microsoft Excel for Mac or Windows (Microsoft 365 / recent desktop Excel)
@@ -15,6 +17,8 @@ Office.js task-pane add-in that reuses calculator math from `../src/lib` (Vite a
 | `manifest.prod.xml` | https://jobberlm.vercel.app/excel/ | Production sideload (deployed with the web app) |
 
 Do not mix them: local manifest needs the local HTTPS server; prod manifest needs a successful Vercel deploy.
+
+`manifest.prod.xml` is store-oriented: versioned display name, SupportUrl → jobberlm.vercel.app, Insert value / Insert table capabilities described in the tooltip.
 
 ## Develop (localhost)
 
@@ -33,7 +37,7 @@ npm run dev
 
 1. Open https://localhost:3000 and accept the self-signed certificate (required once so Excel can load the pane).
 2. Sideload **`manifest.xml`** (steps below).
-3. Use **Jobber Calc** → **Insert into Excel**.
+3. Use **Jobber Calc** → **Insert value** or **Insert table**.
 
 ## Production sideload (Vercel)
 
@@ -42,7 +46,8 @@ No local server required.
 1. Confirm the hosted pane loads: [https://jobberlm.vercel.app/excel/](https://jobberlm.vercel.app/excel/)
 2. Sideload **`manifest.prod.xml`** using the Mac or Windows steps below.
 3. Ribbon button: **Jobber Calc** (display name includes “Prod”).
-4. **Insert into Excel** writes the display string into the active cell via Office.js.
+4. **Insert value** writes the display string into the active cell.
+5. **Insert table** writes a small range (mode, value, unit, memory, triangle fields, recent tape) starting at the active cell.
 
 Web calculator (non-Office): [https://jobberlm.vercel.app/](https://jobberlm.vercel.app/)
 
@@ -71,9 +76,37 @@ If Upload My Add-in is missing:
 
 Alternatively use [Microsoft 365 Agents Toolkit](https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins) / `office-addin-debugging`.
 
-## Insert into Excel
+## Microsoft 365 admin — centralized deployment
 
-The task pane calls `Excel.run` and sets `workbook.getActiveCell().values` to the current calculator display string (FIS / DEC / INCH / MET formatted).
+For org-wide rollout without AppSource (tenant admin):
+
+1. Sign in to [Microsoft 365 admin center](https://admin.microsoft.com/) as a Global or Exchange admin.
+2. **Settings → Integrated apps** (or **Settings → Apps → Integrated apps**).
+3. **Upload custom apps** → upload `manifest.prod.xml`.
+4. Assign to users/groups; users get **Jobber Calc** in Excel after policy sync (may take minutes to hours).
+5. Confirm the task pane origin `https://jobberlm.vercel.app` is allowed by your org network / Safe Links policies.
+
+Docs: [Centralized Deployment](https://learn.microsoft.com/microsoft-365/admin/manage/manage-deployment-of-add-ins).
+
+## AppSource / Partner Center (not done here)
+
+Publishing to AppSource requires a [Microsoft Partner Center](https://partner.microsoft.com/) developer account, certification, privacy policy hosting, and store listing assets. This repo prepares `manifest.prod.xml` and hosting on Vercel; it does **not** submit to AppSource.
+
+### Store-readiness checklist
+
+- [ ] Partner Center account + MPN ID
+- [ ] Privacy policy URL (point at jobberlm.vercel.app or a dedicated privacy page)
+- [ ] Support URL: https://jobberlm.vercel.app/ (already in `manifest.prod.xml`)
+- [ ] Screenshots: task pane in Excel (desktop Win + Mac), Insert value, Insert table result
+- [ ] 32×32 / 80×80 icons (see `excel-addin/public/assets/`)
+- [ ] Short + long description, categories (Productivity / Construction tools)
+- [ ] Age rating / data handling: no account, no server-side user data from the add-in
+- [ ] Test against Excel Online if targeting that host (current MVP targets desktop workbook host)
+- [ ] Validation with [office-addin-manifest validate](https://learn.microsoft.com/office/dev/add-ins/testing/troubleshoot-manifest)
+
+### Privacy (light)
+
+The add-in runs locally in Excel’s task pane, loads JS/CSS from `https://jobberlm.vercel.app/excel/`, and writes only to the workbook the user chooses via Insert. No sign-in. The main web app may use Vercel Analytics; the Excel iframe path is separate and does not load `@vercel/analytics`.
 
 ## Shared code
 

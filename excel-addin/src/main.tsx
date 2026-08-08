@@ -74,6 +74,70 @@ async function insertValue(text: string): Promise<string> {
   })
 }
 
+function dimLabel(
+  dim: { format: (mode: 'FIS' | 'DEC' | 'INCH' | 'MET') => string } | null,
+  mode: 'FIS' | 'DEC' | 'INCH' | 'MET',
+): string {
+  return dim ? dim.format(mode) : ''
+}
+
+/** Build a small table: summary + triangle + recent tape. */
+function buildInsertTable(
+  snap: ReturnType<CalcEngine['getSnapshot']>,
+  program: CalcProgram,
+): string[][] {
+  const rows: string[][] = [
+    ['Jobber Calc', PROGRAM_TITLE[program]],
+    ['Value', snap.display],
+    ['Unit', snap.mode],
+    ['Memory', snap.memory ?? ''],
+    ['', ''],
+    ['Triangle', ''],
+    ['Rise', dimLabel(snap.triangle.rise, snap.mode)],
+    ['Run', dimLabel(snap.triangle.run, snap.mode)],
+    ['Slope', dimLabel(snap.triangle.slope, snap.mode)],
+    [
+      'Pitch',
+      snap.triangle.pitch != null ? `${snap.triangle.pitch.toFixed(4)}/12` : '',
+    ],
+    [
+      'DEG',
+      snap.triangle.deg != null ? snap.triangle.deg.toFixed(4) : '',
+    ],
+    ['', ''],
+    ['Tape', ''],
+  ]
+  const tape = snap.tape.slice(0, 12)
+  if (tape.length === 0) {
+    rows.push(['(empty)', ''])
+  } else {
+    for (const entry of tape) {
+      rows.push([entry.text, ''])
+    }
+  }
+  return rows
+}
+
+async function insertTable(
+  snap: ReturnType<CalcEngine['getSnapshot']>,
+  program: CalcProgram,
+): Promise<string> {
+  if (typeof Office === 'undefined' || !Office.context?.document) {
+    return 'Office not available — open inside Excel task pane'
+  }
+  const values = buildInsertTable(snap, program)
+  return new Promise((resolve) => {
+    Excel.run(async (context) => {
+      const start = context.workbook.getActiveCell()
+      const range = start.getResizedRange(values.length - 1, 1)
+      range.values = values
+      range.format.autofitColumns()
+      await context.sync()
+      resolve(`Inserted ${values.length}×2 table at active cell`)
+    }).catch((err: Error) => resolve(err.message || 'Insert table failed'))
+  })
+}
+
 function TaskPane() {
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
     engine: new CalcEngine(),
@@ -89,7 +153,6 @@ function TaskPane() {
     if (typeof Office !== 'undefined' && Office.onReady) {
       Office.onReady().then(boot).catch(boot)
     } else {
-      // Browser preview without Excel
       setOfficeReady(false)
       setStatus('Preview mode (not inside Excel)')
     }
@@ -170,17 +233,30 @@ function TaskPane() {
         </button>
       </div>
 
-      <button
-        type="button"
-        className="insert"
-        disabled={!officeReady && typeof Office === 'undefined'}
-        onClick={async () => {
-          const msg = await insertValue(snap.display)
-          setStatus(msg)
-        }}
-      >
-        Insert into Excel
-      </button>
+      <div className="insert-row">
+        <button
+          type="button"
+          className="insert"
+          disabled={!officeReady && typeof Office === 'undefined'}
+          onClick={async () => {
+            const msg = await insertValue(snap.display)
+            setStatus(msg)
+          }}
+        >
+          Insert value
+        </button>
+        <button
+          type="button"
+          className="insert insert-table"
+          disabled={!officeReady && typeof Office === 'undefined'}
+          onClick={async () => {
+            const msg = await insertTable(snap, state.program)
+            setStatus(msg)
+          }}
+        >
+          Insert table
+        </button>
+      </div>
       <p className="status">{status}</p>
       <p className="hint">Math shared from <code>src/lib</code> via Vite alias.</p>
     </div>

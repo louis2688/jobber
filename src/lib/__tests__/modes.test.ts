@@ -265,6 +265,51 @@ describe('depth helpers', () => {
     expect(str.tape).toMatch(/platform/)
   })
 
+  it('roof: DEG 0 toggles jack side after irregular setup', () => {
+    const bags = new ModeBags()
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(8), 'DEC', bags, {})
+    handleProgramKey('roof', 'run', Dimension.fromInches(120), 'INCH', bags, {})
+    expect(bags.roof.jackSide).toBe(1)
+    const t = handleProgramKey('roof', 'deg', Dimension.zero(), 'DEC', bags, {})
+    expect(bags.roof.jackSide).toBe(2)
+    expect(t.tape).toMatch(/jack side 2/)
+  })
+
+  it('roof: side2 jack uses pitch2 common', () => {
+    const bags = new ModeBags()
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(8), 'DEC', bags, {})
+    handleProgramKey('roof', 'run', Dimension.fromInches(120), 'INCH', bags, {})
+    handleProgramKey('roof', 'clrtr', Dimension.fromInches(24), 'INCH', bags, {})
+    bags.roof.jackSide = 2
+    const rise = (6 / 12) * 120
+    const run2 = (rise * 12) / 8
+    const common2 = Math.hypot(run2, rise)
+    const factor2 = Math.sqrt(1 + (8 / 12) ** 2)
+    const j1 = handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
+    expect(j1.tape).toMatch(/side2/)
+    expect(j1.value!.toInches()).toBeCloseTo(common2 - 24 * factor2, 3)
+  })
+
+  it('stairs: steep stringer notes headroom', () => {
+    const bags = new ModeBags()
+    handleProgramKey('stairs', 'rise', Dimension.fromInches(120), 'INCH', bags, {})
+    handleProgramKey('stairs', 'run', Dimension.fromInches(80), 'INCH', bags, {})
+    const str = handleProgramKey('stairs', 'slp', Dimension.zero(), 'INCH', bags, {})
+    expect(str.tape).toMatch(/headroom/)
+  })
+
+  it('stairs: 1stStp summarizes risers/treads', () => {
+    const bags = new ModeBags()
+    handleProgramKey('stairs', 'rise', Dimension.fromInches(105), 'INCH', bags, {})
+    handleProgramKey('stairs', 'pitch', Dimension.fromInches(7.5), 'INCH', bags, {})
+    handleProgramKey('stairs', 'deg', Dimension.fromInches(10), 'INCH', bags, {})
+    const first = handleProgramKey('stairs', 'clrtr', Dimension.zero(), 'INCH', bags, {})
+    expect(first.tape).toMatch(/1stStp/)
+    expect(first.tape).toMatch(/risers/)
+  })
+
   it('DMS: packed export and display string', () => {
     const parts = decimalToDms(45.5)
     expect(parts.degrees).toBe(45)

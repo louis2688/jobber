@@ -102,6 +102,41 @@ export class CalcEngine {
     return this.memoryBank
   }
 
+  /** Mode bags for roof/stairs/circle/oblique (App-layer persistence). */
+  getBags(): ModeBags {
+    return this.bags
+  }
+
+  /**
+   * Restore triangle inputs + solved state without tape noise.
+   * Used by localStorage persistence from the App layer.
+   */
+  restoreTriangleBag(inputs: Partial<{
+    rise: Dimension
+    run: Dimension
+    pitch: number
+    slope: Dimension
+    deg: number
+  }>): void {
+    this.triangleInputs = { ...inputs }
+    const keys = (Object.keys(this.triangleInputs) as TriangleField[]).filter(
+      (k) => this.triangleInputs[k] != null,
+    )
+    if (keys.length >= 2) {
+      this.triangle = solveTriangle(this.triangleInputs)
+      this.lastTriangle = this.triangle
+    } else {
+      this.triangle = {
+        ...emptyTriangle(),
+        rise: this.triangleInputs.rise ?? null,
+        run: this.triangleInputs.run ?? null,
+        pitch: this.triangleInputs.pitch ?? null,
+        slope: this.triangleInputs.slope ?? null,
+        deg: this.triangleInputs.deg ?? null,
+      }
+    }
+  }
+
   setMode(mode: DisplayMode): void {
     this.error = null
     const current = this.getValue()

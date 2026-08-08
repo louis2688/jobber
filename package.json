@@ -10,16 +10,20 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:install": "playwright install chromium",
     "excel:dev": "npm --prefix excel-addin run dev",
     "excel:build": "npm --prefix excel-addin run build",
     "excel:install": "npm --prefix excel-addin install"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.13.3",
@@ -30,6 +34,7 @@
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"
   }
 }
