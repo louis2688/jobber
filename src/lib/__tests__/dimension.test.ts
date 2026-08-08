@@ -3,24 +3,25 @@ import { Dimension } from '../dimension.ts'
 import { EntryBuffer, parseFisString } from '../parse.ts'
 
 describe('Dimension FIS format/parse', () => {
-  it('formats zero as 0 : 0 : 0/16', () => {
-    expect(Dimension.zero().format('FIS')).toBe('0 : 0 : 0/16')
+  it('formats zero as Jobber FIS', () => {
+    expect(Dimension.zero().format('FIS')).toBe('0 ft. : 0 : 0/16 inch')
   })
 
   it('round-trips 10 ft 6 in', () => {
     const d = Dimension.fromFis(10, 6, 0)
     expect(d.toInches()).toBe(126)
-    expect(d.format('FIS')).toBe('10 : 6 : 0/16')
+    expect(d.format('FIS')).toBe('10 ft. : 6 : 0/16 inch')
     expect(parseFisString('10 : 6 : 0/16').toInches()).toBe(126)
+    expect(parseFisString('10 ft. : 6 : 0/16 inch').toInches()).toBe(126)
   })
 
   it('handles sixteenths and carry', () => {
-    const d = Dimension.fromInches(12 + 1 + 8 / 16) // 1' 1-8/16"
-    expect(d.format('FIS')).toBe('1 : 1 : 8/16')
+    const d = Dimension.fromInches(12 + 1 + 8 / 16)
+    expect(d.format('FIS')).toBe('1 ft. : 1 : 8/16 inch')
   })
 
-  it('converts FIS ↔ DEC ↔ INCH ↔ MET', () => {
-    const d = Dimension.fromFis(2, 0, 0) // 24"
+  it('converts FIS to DEC INCH MET', () => {
+    const d = Dimension.fromFis(2, 0, 0)
     expect(d.toFeet()).toBe(2)
     expect(d.toInches()).toBe(24)
     expect(d.toMm()).toBeCloseTo(609.6, 5)
@@ -32,8 +33,8 @@ describe('Dimension FIS format/parse', () => {
   it('adds and subtracts across units', () => {
     const a = Dimension.fromFis(1, 0, 0)
     const b = Dimension.fromInches(6)
-    expect(a.add(b).format('FIS')).toBe('1 : 6 : 0/16')
-    expect(a.subtract(b).format('FIS')).toBe('0 : 6 : 0/16')
+    expect(a.add(b).format('FIS')).toBe('1 ft. : 6 : 0/16 inch')
+    expect(a.subtract(b).format('FIS')).toBe('0 ft. : 6 : 0/16 inch')
   })
 
   it('parses negative FIS strings', () => {
@@ -43,23 +44,23 @@ describe('Dimension FIS format/parse', () => {
 })
 
 describe('EntryBuffer FIS keypad', () => {
-  it('builds 10 : 6 : 0/16 via digits and colon', () => {
+  it('builds 10 ft 6 in via digits and colon', () => {
     const buf = new EntryBuffer('FIS')
     buf.inputDigit(1)
     buf.inputDigit(0)
     buf.advanceSegment()
     buf.inputDigit(6)
-    expect(buf.formatDisplay()).toBe('10 : 6 : 0/16')
+    expect(buf.formatDisplay()).toBe('10 ft. : 6 : 0/16 inch')
     expect(buf.toDimension().toInches()).toBe(126)
   })
 
-  it('accepts 10–15 keys for sixteenths', () => {
+  it('accepts 10-15 keys for sixteenths', () => {
     const buf = new EntryBuffer('FIS')
     buf.inputDigit(0)
     buf.advanceSegment()
     buf.inputDigit(0)
     buf.advanceSegment()
     buf.inputDigit(15)
-    expect(buf.formatDisplay()).toBe('0 : 0 : 15/16')
+    expect(buf.formatDisplay()).toBe('0 ft. : 0 : 15/16 inch')
   })
 })

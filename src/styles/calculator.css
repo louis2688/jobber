@@ -1,7 +1,5 @@
 :root {
-  /* Exact palette from jobberinstruments.com/demo theme CSS */
   --bg: #222222;
-  --panel: #222222;
   --key-gray: #2d2d2d;
   --key-gray-top: #444444;
   --key-gray-border: #111111;
@@ -18,15 +16,12 @@
   --key-white-top: #ffffff;
   --key-white-border: #cccccc;
   --key-white-text: #2f3e46;
-  --display-blue: #5f9cc5;
-  --display-blue-end: #396b9e;
-  --display-dark: #2d2d2d;
-  --display-dark-top: #444444;
-  --text: #ffffff;
-  --text-dark: #222222;
   --font-ui: Helvetica, Arial, sans-serif;
-  --radius: 1em;
-  --key-h: 52px;
+  --gap: 5px;
+  --pad: 8px;
+  --radius-btn: 0.75em;
+  --radius-cell: 0.55em;
+  --shell-max: 920px;
 }
 
 * {
@@ -37,108 +32,106 @@ html,
 body,
 #root {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
   font-family: var(--font-ui);
-  color: var(--text);
-  background: linear-gradient(#444444, #222222);
-  background-attachment: fixed;
+  color: #fff;
+  background: #222;
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 0.75rem 0.75rem 1.5rem;
-}
-
-.app-toolbar {
-  width: min(520px, 100%);
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.export-btn {
-  border: none;
-  background: #333;
-  color: #ddd;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.4rem 0.7rem;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.export-btn:hover {
-  background: #444;
+  background: linear-gradient(#444, #222);
+  max-width: var(--shell-max);
+  margin: 0 auto;
 }
 
 .calc-device {
-  width: min(520px, 100%);
-  background: var(--panel);
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  padding: var(--pad) clamp(8px, 1.5vw, 16px);
+  gap: var(--gap);
 }
 
+/* Header: mode | main display (Jobber ui-grid-a) */
 .mode-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  flex: 0 0 auto;
+}
+
+.mode-bar-cell {
+  min-height: 48px;
+  border-radius: var(--radius-cell);
+  border: 1px solid #111;
+  background: linear-gradient(#3c3c3c, #111);
+  color: #fff;
+  font-weight: 700;
+  font-size: clamp(1rem, 2.2vw, 1.25rem);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(#3c3c3c, #111111);
-  border-bottom: 1px solid #333;
-  padding: 0.55rem 0.85rem;
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 0 0.85rem;
   text-shadow: 0 -1px 0 #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
-.mode-bar-count {
-  font-weight: 600;
-  opacity: 0.9;
+.mode-bar-cell.right {
+  justify-content: flex-end;
+  text-align: right;
 }
 
+/* Memory: 3×2 like Jobber mem-vals */
 .display-stack {
   display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr;
-  gap: 0.45rem;
-  padding: 0.55rem 0.55rem 0.7rem;
-  background: #151515;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--gap);
+  flex: 0 0 auto;
 }
 
-.disp-cell {
+.disp-cell,
+.clear-mem {
+  appearance: none;
+  min-height: 46px;
+  border-radius: var(--radius-cell);
+  font-family: var(--font-ui);
+  font-size: clamp(0.9rem, 1.8vw, 1.1rem);
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 44px;
-  padding: 0.35rem 0.55rem;
-  border-radius: 0.6em;
-  font-size: clamp(0.85rem, 2.8vw, 1.05rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  color: #fff;
+  width: 100%;
+  text-align: left;
 }
 
 .disp-blue {
-  background: linear-gradient(#6facd5, var(--display-blue-end));
-  border: 1px solid var(--key-blue-border);
-  color: #fff;
+  border: 1px solid #044062;
+  background: linear-gradient(#6facd5, #396b9e);
   text-shadow: 0 1px 0 #194b7e;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .disp-dark {
-  background: linear-gradient(var(--display-dark-top), var(--display-dark));
   border: 1px solid #111;
-  color: #fff;
+  background: linear-gradient(#444, #2d2d2d);
   text-shadow: 0 1px 0 #111;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .disp-value {
@@ -149,68 +142,76 @@ body {
 }
 
 .disp-icon {
-  opacity: 0.85;
-  font-size: 0.75rem;
-  margin-left: 0.35rem;
+  opacity: 0.9;
+  font-size: 0.7rem;
+  margin-left: 0.25rem;
+  width: 1rem;
+  text-align: center;
 }
 
 .clear-mem {
-  grid-column: 3;
-  grid-row: 2;
-  border: 1px solid var(--key-red-border);
-  border-radius: 0.6em;
-  background: linear-gradient(var(--key-red-top), var(--key-red));
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  min-height: 44px;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid #ed1c24;
+  background: linear-gradient(#ff1e27, #d51920);
   text-shadow: 0 1px 0 #444;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 1px 3px rgba(0, 0, 0, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-}
-
-.clear-mem:active {
-  transform: translateY(1px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .display-stack[data-error='true'] .disp-main {
   color: #ffcdd2;
 }
 
+/* 7-col keypad — wider keys, capped row height so they aren’t tall pills */
 .keypad {
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.4rem;
-  padding: 0.35rem 0.55rem 0.75rem;
-  background: #151515;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(52px, 1fr));
+  gap: var(--gap);
+  min-height: 300px;
+  max-height: min(58vh, 480px);
+  width: 100%;
+  align-content: stretch;
 }
 
 .key {
   appearance: none;
+  position: relative;
   border: 1px solid transparent;
-  border-radius: var(--radius);
-  min-height: var(--key-h);
+  border-radius: var(--radius-btn);
   font-family: var(--font-ui);
-  font-size: clamp(0.85rem, 2.6vw, 1.05rem);
+  font-size: clamp(0.9rem, 1.6vw, 1.2rem);
   font-weight: 700;
   cursor: pointer;
   color: #fff;
-  text-decoration: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 1px 3px rgba(0, 0, 0, 0.2);
+  min-height: 52px;
+  padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* jQuery Mobile gloss line */
+.key::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 1px;
+  height: 45%;
+  border-radius: var(--radius-btn) var(--radius-btn) 40% 40%;
+  background: linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
 .key:active {
-  transform: translateY(1px);
+  filter: brightness(0.92);
 }
 
 .key-digit {
@@ -234,7 +235,7 @@ body {
 .key-yellow {
   border-color: var(--key-yellow-border);
   background: linear-gradient(var(--key-yellow-top), var(--key-yellow));
-  color: var(--text-dark);
+  color: #222;
   text-shadow: 0 1px 0 #fff;
 }
 
@@ -245,29 +246,46 @@ body {
   text-shadow: 0 1px 0 #fff;
 }
 
-.key-wide {
-  grid-column: span 2;
+.key.active {
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
-.key.active {
-  outline: 2px solid #fff;
-  outline-offset: -2px;
+.fab-export {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 10;
+}
+
+.fab-export .export-btn {
+  border: 1px solid #044062;
+  background: linear-gradient(#5f9cc5, #396b9e);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .help-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 20;
+  z-index: 30;
 }
 
 .help-card {
   width: min(420px, 100%);
   background: #222;
+  border: 1px solid #444;
   border-radius: 12px;
   padding: 1rem 1.1rem;
   color: #eee;
@@ -286,8 +304,8 @@ body {
 }
 
 .help-card button {
-  border: none;
-  background: var(--key-blue);
+  border: 1px solid #044062;
+  background: linear-gradient(#5f9cc5, #396b9e);
   color: #fff;
   font-weight: 700;
   border-radius: 8px;
@@ -295,70 +313,42 @@ body {
   cursor: pointer;
 }
 
-.tape-drawer {
-  width: min(520px, 100%);
-  margin-top: 0.65rem;
-  background: #1a1a1a;
-  border-radius: 8px;
-  padding: 0.65rem 0.75rem;
-  color: #bbb;
-  font-size: 0.8rem;
+@media (min-width: 721px) {
+  body {
+    background: #111;
+  }
+
+  .app-shell {
+    border-left: 1px solid #333;
+    border-right: 1px solid #333;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .keypad {
+    max-height: min(62vh, 520px);
+  }
 }
 
-.tape-drawer summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: #ddd;
-  list-style: none;
-}
-
-.tape-drawer summary::-webkit-details-marker {
-  display: none;
-}
-
-.tape-list {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  max-height: 160px;
-  overflow: auto;
-}
-
-.tape-list li {
-  padding: 0.25rem 0;
-  border-bottom: 1px solid #2e2e2e;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.75rem;
-}
-
-.triangle-inline {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.25rem 0.75rem;
-  margin-top: 0.55rem;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.72rem;
-}
-
-@media (max-width: 420px) {
+@media (max-width: 640px) {
   :root {
-    --key-h: 46px;
-    --radius: 12px;
+    --shell-max: 100%;
+    --gap: 3px;
+    --pad: 4px;
   }
 
   .key {
-    font-size: 0.78rem;
+    min-height: 46px;
+    font-size: clamp(0.78rem, 3.2vw, 0.95rem);
   }
 
-  .clear-mem {
-    font-size: 0.85rem;
+  .keypad {
+    max-height: none;
+    min-height: 260px;
   }
 }
 
-button.disp-cell {
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
+.key-mode-btn {
+  z-index: 2;
+  border: 2px solid #fff !important;
+  box-shadow: 0 0 0 2px #5f9cc5, 0 1px 3px rgba(0, 0, 0, 0.35);
 }

@@ -183,7 +183,7 @@ export class EntryBuffer {
   formatDisplay(): string {
     if (this.mode === 'FIS') {
       const sign = this.negative ? '-' : ''
-      return `${sign}${this.feet} : ${this.inches} : ${this.sixteenths}/16`
+      return `${sign}${this.feet} ft. : ${this.inches} : ${this.sixteenths}/16 inch`
     }
     const sign = this.negative ? '-' : ''
     const text = this.decimalText === '' ? '0' : this.decimalText
@@ -202,9 +202,13 @@ export class EntryBuffer {
   }
 }
 
-/** Parse a FIS display string like `10 : 6 : 0/16` or `-1 : 2 : 8/16`. */
+/** Parse a FIS display string like `10 : 6 : 0/16` or `10 ft. : 6 : 0/16 inch`. */
 export function parseFisString(input: string): Dimension {
-  const trimmed = input.trim()
+  const trimmed = input
+    .replace(/ft\.?/gi, '')
+    .replace(/inch(?:es)?/gi, '')
+    .replace(/"/g, '')
+    .trim()
   const negative = trimmed.startsWith('-')
   const body = negative ? trimmed.slice(1).trim() : trimmed
   const match = body.match(/^(\d+)\s*:\s*(\d+)\s*:\s*(\d+)\s*\/\s*16$/)

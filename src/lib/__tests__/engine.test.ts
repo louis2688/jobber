@@ -13,7 +13,7 @@ describe('CalcEngine', () => {
     eng.inputDigit(6) // 0' 6"
     eng.equals()
     expect(eng.getValue().toInches()).toBe(24)
-    expect(eng.getDisplay()).toBe('2 : 0 : 0/16')
+    expect(eng.getDisplay()).toBe('2 ft. : 0 : 0/16 inch')
   })
 
   it('converts modes without changing length', () => {

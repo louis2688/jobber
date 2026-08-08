@@ -138,7 +138,7 @@ export class Dimension {
       case 'FIS': {
         const { negative, feet, inches, sixteenths } = this.toFis()
         const sign = negative ? '-' : ''
-        return `${sign}${feet} : ${inches} : ${sixteenths}/16`
+        return `${sign}${feet} ft. : ${inches} : ${sixteenths}/16 inch`
       }
       case 'DEC': {
         const v = this.toFeet()

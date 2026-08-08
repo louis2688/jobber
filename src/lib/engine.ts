@@ -6,6 +6,8 @@ import {
   type TriangleField,
   type TriangleState,
 } from './triangle.ts'
+import { handleProgramKey, ModeBags } from './modeSolvers.ts'
+import type { CalcProgram, FnKeyId } from './programs.ts'
 
 export type Operator = '+' | '-' | '*' | '/'
 
@@ -50,6 +52,8 @@ export class CalcEngine {
   }> = {}
   private error: string | null = null
   private lastTriangle: TriangleState | null = null
+  private bags = new ModeBags()
+  program: CalcProgram = 'triangle'
 
   getDisplay(): string {
     if (this.error) return this.error
@@ -342,6 +346,54 @@ export class CalcEngine {
       this.value = this.triangle.slope
       this.entering = false
       this.entry.loadFromDimension(this.value)
+    }
+  }
+
+
+  setProgram(program: CalcProgram): void {
+    this.program = program
+    this.error = null
+    this.pushTape(`program ${program}`)
+  }
+
+  handleProgramFn(key: FnKeyId): void {
+    this.error = null
+    try {
+      if (this.program === 'triangle' && key === 'retr') {
+        this.recallTriangle()
+        return
+      }
+      const result = handleProgramKey(
+        this.program,
+        key,
+        this.getValue(),
+        this.mode,
+        this.bags,
+        this.triangleInputs,
+      )
+      if (result.clearTriangle) {
+        this.triangle = emptyTriangle()
+        this.triangleInputs = {}
+      }
+      if (result.triangleInputs) {
+        this.triangleInputs = result.triangleInputs
+      }
+      if (result.triangle) {
+        this.triangle = result.triangle
+        this.lastTriangle = result.triangle
+      }
+      if (result.forceDec) {
+        this.mode = 'DEC'
+        this.entry.reset('DEC')
+      }
+      if (result.value) {
+        this.value = result.value
+        this.entering = false
+        this.entry.loadFromDimension(result.value)
+      }
+      this.pushTape(result.tape)
+    } catch (e) {
+      this.setError(e)
     }
   }
 
