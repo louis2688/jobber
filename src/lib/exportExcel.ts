@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx'
 import type { DisplayMode } from './dimension.ts'
 import type { TapeEntry } from './engine.ts'
 import {
@@ -18,8 +17,14 @@ export interface ExportPayload {
 
 /**
  * Build and download a .xlsx workbook with current value, tape, and triangle.
+ * Loads SheetJS on demand so the calculator shell stays out of the xlsx chunk.
  */
-export function exportToExcel(payload: ExportPayload, filename = 'jobber-calc.xlsx'): void {
+export async function exportToExcel(
+  payload: ExportPayload,
+  filename = 'jobber-calc.xlsx',
+): Promise<void> {
+  const XLSX = await import('xlsx')
+
   const wb = XLSX.utils.book_new()
 
   const riseText = payload.triangle.rise

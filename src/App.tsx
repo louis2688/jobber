@@ -1,10 +1,15 @@
-import { useReducer, useState } from 'react'
+import { lazy, Suspense, useReducer, useState } from 'react'
 import { Display } from './components/Display.tsx'
-import { ExportButton } from './components/ExportButton.tsx'
 import { Keypad, type KeyAction } from './components/Keypad.tsx'
 import { CalcEngine } from './lib/engine.ts'
 import { nextProgram, PROGRAM_TITLE, type CalcProgram } from './lib/programs.ts'
 import './styles/calculator.css'
+
+const ExportButton = lazy(() =>
+  import('./components/ExportButton.tsx').then((m) => ({
+    default: m.ExportButton,
+  })),
+)
 
 function createEngine() {
   return new CalcEngine()
@@ -119,15 +124,17 @@ export default function App() {
       </div>
 
       <div className="fab-export">
-        <ExportButton
-          payload={{
-            display: snap.display,
-            mode: snap.mode,
-            memory: snap.memory,
-            tape: snap.tape,
-            triangle: snap.triangle,
-          }}
-        />
+        <Suspense fallback={null}>
+          <ExportButton
+            payload={{
+              display: snap.display,
+              mode: snap.mode,
+              memory: snap.memory,
+              tape: snap.tape,
+              triangle: snap.triangle,
+            }}
+          />
+        </Suspense>
       </div>
 
       {helpOpen ? (

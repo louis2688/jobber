@@ -13,6 +13,21 @@ export default defineConfig({
       '@lib': path.resolve(__dirname, '../src/lib'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/scheduler')
+          ) {
+            return 'vendor-react'
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     strictPort: true,
