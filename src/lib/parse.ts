@@ -5,13 +5,19 @@ export type EntrySegment = 'feet' | 'inches' | 'sixteenths'
 /**
  * Tracks in-progress keypad entry for FIS (feet : inches : n/16)
  * and decimal modes (DEC / INCH / MET).
+ *
+ * FIS digit entry matches Jobber jt.js: each digit enters at the
+ * sixteenths place and shifts prior values left (16ths → inches → feet).
  */
 export class EntryBuffer {
   mode: DisplayMode
-  /** FIS segments */
-  feet = 0
-  inches = 0
-  sixteenths = 0
+  /** FIS display registers (Jobber feet_disp / inches_disp / fraction_disp). */
+  private feetText = '0'
+  private inchesText = '0'
+  private fractionText = '0'
+  /** After 12–15 (or 10–11 when inches already multi-digit), further FIS digits are ignored. */
+  private fracLocked = false
+  /** Legacy segment cursor — unused for Jobber FIS shift entry; kept for API compat. */
   segment: EntrySegment = 'feet'
   /** True once the user has typed something in the current entry. */
   dirty = false
@@ -23,15 +29,24 @@ export class EntryBuffer {
     this.mode = mode
   }
 
-  private segmentFlags = { feet: false, inches: false, sixteenths: false }
+  /** Numeric FIS parts (for tests / callers). */
+  get feet(): number {
+    return Number(this.feetText) || 0
+  }
+  get inches(): number {
+    return Number(this.inchesText) || 0
+  }
+  get sixteenths(): number {
+    return Number(this.fractionText) || 0
+  }
 
   reset(mode: DisplayMode = this.mode): void {
     this.mode = mode
-    this.feet = 0
-    this.inches = 0
-    this.sixteenths = 0
+    this.feetText = '0'
+    this.inchesText = '0'
+    this.fractionText = '0'
+    this.fracLocked = false
     this.segment = 'feet'
-    this.segmentFlags = { feet: false, inches: false, sixteenths: false }
     this.dirty = false
     this.decimalText = ''
     this.negative = false
@@ -50,10 +65,11 @@ export class EntryBuffer {
     this.negative = dim.toInches() < 0
     if (this.mode === 'FIS') {
       const fis = dim.toFis()
-      this.feet = fis.feet
-      this.inches = fis.inches
-      this.sixteenths = fis.sixteenths
+      this.feetText = String(fis.feet)
+      this.inchesText = String(fis.inches)
+      this.fractionText = String(fis.sixteenths)
       this.negative = fis.negative
+      this.fracLocked = false
       this.segment = 'feet'
       this.dirty = false
       this.decimalText = ''
@@ -66,8 +82,8 @@ export class EntryBuffer {
 
   /**
    * Digit key 0–15.
-   * - Keys 0–9: accumulate multi-digit in current FIS segment / decimal buffer
-   * - Keys 10–15: set current FIS segment (or append digits in decimal modes)
+   * - FIS: Jobber right-to-left shift into 16ths → inches → feet
+   * - DEC/INCH/MET: append to decimal text buffer
    */
   inputDigit(n: number): void {
     if (n < 0 || n > 15 || !Number.isInteger(n)) return
@@ -78,48 +94,42 @@ export class EntryBuffer {
       return
     }
 
-    if (n >= 10) {
-      // Two-digit key in decimal modes
-      this.decimalText += String(n)
-    } else {
-      this.decimalText += String(n)
-    }
+    this.decimalText += String(n)
   }
 
+  /**
+   * Jobber jt.js fis digit path:
+   *   if (feet_disp == 0) feet_disp = ""
+   *   feet_disp = feet_disp + inches_disp
+   *   inches_disp = fraction_disp
+   *   fraction_disp = digit
+   */
   private inputFisDigit(n: number): void {
-    if (n >= 10) {
-      // Direct set for 10–15 (Jobber-style single key)
-      this.setSegment(n)
-      return
+    if (this.fracLocked) return
+
+    // Loose equality like Jobber: "0" == 0 → strip leading zero feet before append
+    let feet = this.feetText
+    if (Number(feet) === 0) feet = ''
+    this.feetText = feet + this.inchesText
+    if (this.feetText === '') this.feetText = '0'
+    this.inchesText = this.fractionText
+    this.fractionText = String(n)
+
+    // Jobber frac_set: 12–15 always lock; 10–11 lock if inches already multi-digit
+    if (n >= 12) {
+      this.fracLocked = true
+    } else if (n >= 10 && this.inchesText.length > 1) {
+      this.fracLocked = true
     }
-
-    const current = this.getSegment()
-    // Fresh segment start: replace; otherwise accumulate (cap reasonable)
-    if (!this.segmentStarted()) {
-      this.setSegment(n)
-      this.markSegmentStarted()
-      return
-    }
-
-    const next = current * 10 + n
-    const max = this.segment === 'feet' ? 9999 : this.segment === 'inches' ? 15 : 15
-    this.setSegment(Math.min(next, max))
   }
 
-  private segmentStarted(): boolean {
-    return this.segmentFlags[this.segment]
-  }
-
-  private markSegmentStarted(): void {
-    this.segmentFlags[this.segment] = true
-  }
-
-  /** Advance FIS segment: feet → inches → sixteenths (wrap stays on last). */
+  /**
+   * No-op for Jobber FIS (digits shift automatically).
+   * Kept so colon/arrow key does not crash; does not change registers.
+   */
   advanceSegment(): void {
     if (this.mode !== 'FIS') return
     this.dirty = true
-    if (this.segment === 'feet') this.segment = 'inches'
-    else if (this.segment === 'inches') this.segment = 'sixteenths'
   }
 
   inputDecimalPoint(): void {
@@ -134,38 +144,12 @@ export class EntryBuffer {
     this.dirty = true
   }
 
-  private getSegment(): number {
-    switch (this.segment) {
-      case 'feet':
-        return this.feet
-      case 'inches':
-        return this.inches
-      case 'sixteenths':
-        return this.sixteenths
-    }
-  }
-
-  private setSegment(n: number): void {
-    switch (this.segment) {
-      case 'feet':
-        this.feet = n
-        break
-      case 'inches':
-        this.inches = Math.min(n, 15)
-        break
-      case 'sixteenths':
-        this.sixteenths = Math.min(n, 15)
-        break
-    }
-    this.segmentFlags[this.segment] = true
-  }
-
   clearEntry(): void {
-    this.feet = 0
-    this.inches = 0
-    this.sixteenths = 0
+    this.feetText = '0'
+    this.inchesText = '0'
+    this.fractionText = '0'
+    this.fracLocked = false
     this.segment = 'feet'
-    this.segmentFlags = { feet: false, inches: false, sixteenths: false }
     this.decimalText = ''
     this.negative = false
     this.dirty = false
@@ -173,6 +157,7 @@ export class EntryBuffer {
 
   toDimension(): Dimension {
     if (this.mode === 'FIS') {
+      // Jobber getCurrentFeetVal → decimal feet; we store inches via fromFis
       return Dimension.fromFis(this.feet, this.inches, this.sixteenths, this.negative)
     }
     const raw = this.decimalText === '' || this.decimalText === '.' ? 0 : Number(this.decimalText)
@@ -183,7 +168,9 @@ export class EntryBuffer {
   formatDisplay(): string {
     if (this.mode === 'FIS') {
       const sign = this.negative ? '-' : ''
-      return `${sign}${this.feet} ft. : ${this.inches} : ${this.sixteenths}/16 inch`
+      // Match Jobber display_FIS: raw register strings
+      const feet = this.feetText === '' ? '0' : this.feetText
+      return `${sign}${feet} ft. : ${this.inchesText} : ${this.fractionText}/16 inch`
     }
     const sign = this.negative ? '-' : ''
     const text = this.decimalText === '' ? '0' : this.decimalText

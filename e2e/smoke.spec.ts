@@ -113,4 +113,20 @@ test.describe('soft-key labels and mode workflows', () => {
     const text = (await page.locator('.disp-main-value').innerText()).replace(/\s/g, '')
     expect(text).toMatch(/10/)
   })
+
+  test('FIS digits enter from the right at 0/16 (Jobber shift)', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'FIS', exact: true }).click()
+    await page.getByRole('button', { name: 'CE/C' }).click()
+    const keys = page.getByRole('group', { name: 'Calculator keypad' })
+    const main = page.locator('.disp-main-value')
+    await keys.getByRole('button', { name: '9', exact: true }).click()
+    await expect(main).toHaveText('0 ft. : 0 : 9/16 inch')
+    await keys.getByRole('button', { name: '9', exact: true }).click()
+    await expect(main).toHaveText('0 ft. : 9 : 9/16 inch')
+    await keys.getByRole('button', { name: '9', exact: true }).click()
+    await expect(main).toHaveText('9 ft. : 9 : 9/16 inch')
+  })
 })
+
+

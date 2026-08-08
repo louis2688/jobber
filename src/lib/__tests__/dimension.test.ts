@@ -43,24 +43,81 @@ describe('Dimension FIS format/parse', () => {
   })
 })
 
-describe('EntryBuffer FIS keypad', () => {
-  it('builds 10 ft 6 in via digits and colon', () => {
+describe('EntryBuffer FIS keypad (Jobber right-to-left shift)', () => {
+  /**
+   * Demo video + jt.js + jobberh.js:
+   * Digits enter at 0/16 (right) and shift left into inches then feet.
+   * Key sequence from video (repeated 9s):
+   *   9 -> 0:0:9/16 -> 0:9:9/16 -> 9:9:9/16 -> 99:9:9/16
+   */
+  it('enters first digit at sixteenths (video: tap 9)', () => {
     const buf = new EntryBuffer('FIS')
-    buf.inputDigit(1)
-    buf.inputDigit(0)
-    buf.advanceSegment()
-    buf.inputDigit(6)
+    buf.inputDigit(9)
+    expect(buf.formatDisplay()).toBe('0 ft. : 0 : 9/16 inch')
+  })
+
+  it('shifts 16ths to inches on second digit (video: 9, 9)', () => {
+    const buf = new EntryBuffer('FIS')
+    buf.inputDigit(9)
+    buf.inputDigit(9)
+    expect(buf.formatDisplay()).toBe('0 ft. : 9 : 9/16 inch')
+  })
+
+  it('shifts into feet on third+ digits (video: 9x4 -> 99:9:9)', () => {
+    const buf = new EntryBuffer('FIS')
+    for (const d of [9, 9, 9, 9]) buf.inputDigit(d)
+    expect(buf.formatDisplay()).toBe('99 ft. : 9 : 9/16 inch')
+  })
+
+  it('builds 10 ft 5 in 8/16 via 1058 (jobberh rem example)', () => {
+    const buf = new EntryBuffer('FIS')
+    const expected = [
+      '0 ft. : 0 : 1/16 inch',
+      '0 ft. : 1 : 0/16 inch',
+      '1 ft. : 0 : 5/16 inch',
+      '10 ft. : 5 : 8/16 inch',
+    ]
+    ;[1, 0, 5, 8].forEach((d, i) => {
+      buf.inputDigit(d)
+      expect(buf.formatDisplay()).toBe(expected[i])
+    })
+    expect(buf.toDimension().toInches()).toBeCloseTo(10 * 12 + 5 + 8 / 16, 8)
+  })
+
+  it('builds 10 ft 6 in via 1060 (no colon)', () => {
+    const buf = new EntryBuffer('FIS')
+    for (const d of [1, 0, 6, 0]) buf.inputDigit(d)
     expect(buf.formatDisplay()).toBe('10 ft. : 6 : 0/16 inch')
     expect(buf.toDimension().toInches()).toBe(126)
   })
 
-  it('accepts 10-15 keys for sixteenths', () => {
+  it('builds 1 ft 6 in via 160', () => {
     const buf = new EntryBuffer('FIS')
-    buf.inputDigit(0)
-    buf.advanceSegment()
-    buf.inputDigit(0)
-    buf.advanceSegment()
+    for (const d of [1, 6, 0]) buf.inputDigit(d)
+    expect(buf.formatDisplay()).toBe('1 ft. : 6 : 0/16 inch')
+    expect(buf.toDimension().toInches()).toBe(18)
+  })
+
+  it('help example: 1:0:0 then tap 1 -> 10:0:1', () => {
+    const buf = new EntryBuffer('FIS')
+    for (const d of [1, 0, 0]) buf.inputDigit(d) // 1 ft. : 0 : 0/16
+    expect(buf.formatDisplay()).toBe('1 ft. : 0 : 0/16 inch')
+    buf.inputDigit(1)
+    expect(buf.formatDisplay()).toBe('10 ft. : 0 : 1/16 inch')
+  })
+
+  it('accepts 10-15 keys into sixteenths', () => {
+    const buf = new EntryBuffer('FIS')
     buf.inputDigit(15)
     expect(buf.formatDisplay()).toBe('0 ft. : 0 : 15/16 inch')
+    expect(buf.toDimension().toInches()).toBeCloseTo(15 / 16, 8)
+  })
+
+  it('locks further digits after 12-15 (jt.js frac_set)', () => {
+    const buf = new EntryBuffer('FIS')
+    buf.inputDigit(12)
+    expect(buf.formatDisplay()).toBe('0 ft. : 0 : 12/16 inch')
+    buf.inputDigit(9)
+    expect(buf.formatDisplay()).toBe('0 ft. : 0 : 12/16 inch')
   })
 })
