@@ -20,8 +20,9 @@ Press white **mode** (top-left) to cycle programs. Yellow keys change with each 
 
 1. Enter diameter → **Diam** (or radius → **RAD**)
 2. **Circ** → circumference · **Area** → disk (or segment if **DEG** set)
-3. **RAD** + **DEG** → **ARC** (arc length) · **SEG** with `0` → segment height
-4. **Cord** or **DEG** → **M.O.** (middle ordinate / sagitta)
+3. Enter **Circ** / **Area** / **ARC** to back-solve radius (Jobber inverse)
+4. **RAD** + **DEG** → **ARC** · **M.O.** → middle ordinate
+5. **SEG** arms segmented rise → set **Spac** → tap **+** for each rise
 
 ---
 
@@ -29,18 +30,17 @@ Press white **mode** (top-left) to cycle programs. Yellow keys change with each 
 
 **Regular hip/valley**
 
-1. Enter pitch (per 12) → **pitch**
+1. Enter pitch (per 12, or Jobber ratio &lt;1) → **pitch**
 2. Enter run → **Run**
-3. **HIP** → length ≈ common × √2
+3. **HIP** cycles: hip tan → hip angle → hip length
 
 **Irregular hip/valley**
 
 1. **pitch** (side 1) → **pitch** again with different pitch (side 2)
-2. Enter run on side 1 → **Run** (tape: “irreg ready”)
-3. **HIP** → HIP/VAL length + run2 + SLP2 on tape
-4. **Rise** → shows rise and secondary plan width (run2)
-5. Optional: enter `0` → **DEG** toggles jack side (primary ↔ pitch2)
-6. Set **Spac**, then **Rk-Up** / **Rk-Dn** for jack lengths (bay jump: DEC `3` → **Rk-Up**)
+2. Enter run on side 1 → **Run**
+3. **HIP**×3 → length (tape notes run2); **Rise** → run2
+4. Optional: `0` → **DEG** toggles jack side (primary ↔ pitch2)
+5. Set **Spac** → **Rk-Up** / **Rk-Dn** (arms) → tap **+** for each plumb rise
 
 ---
 

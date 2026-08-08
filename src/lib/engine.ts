@@ -6,7 +6,7 @@ import {
   type TriangleField,
   type TriangleState,
 } from './triangle.ts'
-import { handleProgramKey, ModeBags } from './modeSolvers.ts'
+import { handleProgramKey, ModeBags, tryAdvancePlusStepper } from './modeSolvers.ts'
 import type { CalcProgram, FnKeyId } from './programs.ts'
 import { MemoryBank, MEMORY_SLOT_COUNT } from './memory.ts'
 
@@ -30,6 +30,33 @@ export interface EngineSnapshot {
   error: string | null
   pendingOp: Operator | null
 }
+
+
+/** Jobber jt.js getFIS — feet + floor(inches) + round(16ths). Input is decimal feet. */
+export function jobberGetFis(decFeet: number): { feet: number; inch: number; frac: number } {
+  const abs = Math.abs(decFeet)
+  let feet = Math.floor(abs)
+  const t1 = (abs - feet) * 12
+  let inch = Math.floor(t1)
+  let frac = Math.round((t1 - Math.floor(t1)) * 16)
+  if (frac >= 16) {
+    frac = 0
+    inch += 1
+    if (inch >= 12) {
+      inch = 0
+      feet += 1
+    }
+  }
+  return { feet, inch, frac }
+}
+
+/** Jobber jt.js getDec — FIS parts → decimal feet (den=16). */
+export function jobberGetDec(fis: { feet: number; inch: number; frac: number }): number {
+  return fis.feet + fis.inch / 12 + fis.frac / 16 / 12
+}
+
+/** Sixteenth of an inch in feet (jt.js dec16). */
+const JOBBER_DEC16 = 0.0052083
 
 const TAPE_LIMIT = 16
 
@@ -230,6 +257,20 @@ export class CalcEngine {
   setOperator(op: Operator): void {
     this.error = null
     try {
+      // Jobber: + advances SEG / Rk-Up / Rk-Dn when armed (not arithmetic)
+      if (op === '+') {
+        const stepped = tryAdvancePlusStepper(this.program, this.bags, this.mode)
+        if (stepped) {
+          if (stepped.value) {
+            this.value = stepped.value
+            this.entering = false
+            this.entry.loadFromDimension(stepped.value)
+          }
+          this.dmsDisplay = stepped.dmsDisplay ?? null
+          this.pushTape(stepped.tape)
+          return
+        }
+      }
       this.commitPending()
       this.pendingValue = this.getValue()
       this.pendingOp = op
@@ -255,19 +296,18 @@ export class CalcEngine {
     const rhs = this.getValue()
     if (this.pendingOp && this.pendingValue) {
       if (this.pendingOp === '/') {
-        // Jobber rem: leftover so n × quot + rem = original (dimensionless divisor)
+        // Jobber rem via getFIS/getDec (jt.js Action.divide):
+        // ans = getDec(getFIS(quotFeet)); rem = -(ans×div − tot); snap |rem|<dec16 → 0
         const dividend = this.pendingValue
         const divisor = scalarOperand(rhs, this.mode)
         if (divisor !== 0) {
-          const q = dividend.divide(divisor)
-          // rem in same unit inches: original − quot×divisor (quot truncated to 1/16" for FIS)
-          const quotIn = q.toInches()
-          const trunc =
-            this.mode === 'FIS'
-              ? Math.trunc(quotIn * 16) / 16
-              : quotIn
-          const remIn = dividend.toInches() - trunc * divisor
-          this.lastRemainder = Dimension.fromInches(remIn)
+          const totFeet = dividend.toFeet()
+          const quotFeet = totFeet / divisor
+          const fis = jobberGetFis(quotFeet)
+          const ans = jobberGetDec(fis)
+          let rem = ans * divisor - totFeet
+          if (Math.abs(rem) < JOBBER_DEC16) rem = 0
+          this.lastRemainder = Dimension.fromFeet(-rem)
         }
       }
       this.value = applyOp(this.pendingValue, this.pendingOp, rhs, this.mode)
@@ -495,6 +535,16 @@ export class CalcEngine {
         this.entry.loadFromDimension(result.value)
       }
       this.dmsDisplay = result.dmsDisplay ?? null
+      // Jobber: triangle pitch auto-flows to roof for quick HIP
+      if (
+        this.program === 'triangle' &&
+        key === 'pitch' &&
+        result.triangle?.pitch != null
+      ) {
+        this.bags.roof.pitch = result.triangle.pitch
+        this.bags.roof.hipShow = 0
+        this.bags.roof.deg = result.triangle.deg
+      }
       this.pushTape(result.tape)
     } catch (e) {
       this.setError(e)

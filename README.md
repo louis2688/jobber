@@ -43,18 +43,18 @@ Press the white **mode** key (top-left) to cycle programs. Yellow keys change wi
 | Circumference | diameter or radius | **Diam** or **RAD**, then **Circ** | Circumference |
 | Full / segment area | RAD/Diam; optional DEG | **Area** | Full disk, or segment area if DEG set |
 | Arc length | RAD + DEG | **ARC** | Arc length |
-| Segment height | RAD + DEG | **SEG** (with 0) | Segment height; or enter height into **SEG** to back-solve DEG |
+| Segmented rise | RAD + DEG/Cord, Spac | **SEG** (arms), **Spac**, then **+** | Each segment rise (Jobber) |
 | Middle ordinate | RAD + Cord (or DEG) | **M.O.** | Sagitta |
+| Inverse radius | Circ / Area / ARC | enter value → key | Solves RAD |
 
 ### 3. ROOF
 
 | Goal | Inputs | Keys | Result |
 |---|---|---|---|
-| Regular hip/valley | pitch + run (or rise/run) | **pitch**, **Run**, **HIP** | HIP/VAL ≈ common × √2 |
-| Irregular hip/valley | pitch₁, pitch₂, run on side 1 | **pitch**, **pitch** (2nd), **Run**, **HIP** | HIP/VAL length + run2 + SLP2 on tape |
+| Regular hip/valley | pitch + run (or rise/run) | **pitch**, **Run**, **HIP**×3 | Cycles hip tan → angle → length |
+| Irregular hip/valley | pitch₁, pitch₂, run on side 1 | **pitch**, **pitch** (2nd), **Run**, **HIP** | HIP length (+ run2 on tape) |
 | Secondary plan width | after irregular setup | **Rise** | Shows rise and run2 |
-| Jack / rake sequence | pitch, Spac, common (SLP or pitch+run) | **Spac**, then **Rk-Up** / **Rk-Dn** | Jack length (value) + plumb on tape |
-| Jump to bay | bay # in DEC | enter `3` (DEC), **Rk-Up** | Bay #3 |
+| Rake sequence | pitch, Spac (, Rise/Run for Dn) | **Spac**, **Rk-Up**/**Rk-Dn**, then **+** | Plumb rise each bay (Jobber) |
 
 ### 4. STAIRS
 
@@ -194,7 +194,7 @@ See [docs/XLSX.md](docs/XLSX.md) — left on `xlsx@0.18.5` (export-only, lazy); 
 ## Known limitations
 
 - Roof HIP/VAL / jack / rake are practical MVP+ helpers (documented formulas), not a full Jobber Instruments clone.
-- Irregular roofs: enter two pitches + run → HIP; `0`+DEG toggles jack side for Rk-Up/Rk-Dn (primary vs pitch2). Still not full Jobber jack tables.
+- Irregular roofs: enter two pitches + run → HIP (cycles tan/angle/length); `0`+DEG toggles side for Rk-Up/Rk-Dn then **+** (Jobber plumb). Pitch UX stays n/12 (Jobber ratio &lt;1 also accepted).
 - Oblique SSA picks one valid solution and notes the ambiguous second B; it does not flip between both interactively.
 - FIS entry is Jobber-style 0–15 keypad (not a full QWERTY feet-inch parser).
 - No auth (public calculator).

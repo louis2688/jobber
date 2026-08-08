@@ -28,7 +28,8 @@ export interface PersistState {
     slopeIn: number | null
     deg: number | null
     spacIn: number | null
-    rakeIndex: number
+    /** @deprecated kept for older persist blobs */
+    rakeIndex?: number
     jackSide?: 1 | 2
   }
   stairs?: {
@@ -83,7 +84,6 @@ export function capturePersistState(engine: CalcEngine): PersistState {
       slopeIn: dimIn(roof.slope),
       deg: roof.deg,
       spacIn: dimIn(roof.spac),
-      rakeIndex: roof.rakeIndex,
       jackSide: roof.jackSide,
     },
     stairs: {
@@ -144,8 +144,15 @@ export function applyPersistState(engine: CalcEngine, data: PersistState): void 
       slope: fromIn(data.roof.slopeIn),
       deg: data.roof.deg,
       spac: fromIn(data.roof.spacIn),
-      rakeIndex: Math.max(0, data.roof.rakeIndex ?? 0),
       jackSide: data.roof.jackSide === 2 ? 2 : 1,
+      rakeSet: false,
+      rakeMode: 'up',
+      rakeRemainderIn: 0,
+      rake: null,
+      hipShow: 0,
+      hipPitch: null,
+      hipDeg: null,
+      hipLength: null,
     }
   }
   if (data.stairs) {

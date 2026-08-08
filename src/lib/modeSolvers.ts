@@ -61,15 +61,34 @@ export class ModeBags {
     diameter: Dimension | null
     deg: number | null
     cord: Dimension | null
-    seg: Dimension | null
+    /** Middle ordinate (segment height). */
+    mo: Dimension | null
+    /** Inside ordinate (apothem). */
+    io: Dimension | null
+    arc: Dimension | null
+    cir: Dimension | null
+    areaSqIn: number | null
     spac: Dimension | null
+    /** Jobber SEG: arm segmented-rise stepper; + advances. */
+    rakeSet: boolean
+    rakeMode: 'up' | 'down'
+    rakeRemainderIn: number
+    rake: Dimension | null
   } = {
     radius: null,
     diameter: null,
     deg: null,
     cord: null,
-    seg: null,
+    mo: null,
+    io: null,
+    arc: null,
+    cir: null,
+    areaSqIn: null,
     spac: null,
+    rakeSet: false,
+    rakeMode: 'down',
+    rakeRemainderIn: 0,
+    rake: null,
   }
 
   stairs: {
@@ -100,6 +119,10 @@ export class ModeBags {
   } = { a: null, b: null, c: null, A: null, B: null, C: null, ambiguousB: null }
 
   roof: {
+    /**
+     * Construction pitch as rise-per-12 (UX: enter 6 for 6/12).
+     * Jobber jt.js stores rise/run ratio; atan(p/12) matches atan(ratio).
+     */
     pitch: number | null
     /** Second pitch for irregular hip (rise per 12). */
     pitch2: number | null
@@ -108,13 +131,21 @@ export class ModeBags {
     slope: Dimension | null
     deg: number | null
     spac: Dimension | null
-    /** Bay index for rake / jack sequence (1-based). */
-    rakeIndex: number
     /**
-     * Which pitch drives jack/rake drop:
+     * Which pitch drives Rk-Up/Dn:
      * 1 = primary (pitch), 2 = secondary (pitch2 / irregular).
      */
     jackSide: 1 | 2
+    /** Jobber Rk-Up/Dn: arm then + advances plumb rise. */
+    rakeSet: boolean
+    rakeMode: 'up' | 'down'
+    rakeRemainderIn: number
+    rake: Dimension | null
+    /** HIP key cycle: 0=tan, 1=angle, 2=length (Jobber showHip). */
+    hipShow: number
+    hipPitch: number | null
+    hipDeg: number | null
+    hipLength: Dimension | null
   } = {
     pitch: null,
     pitch2: null,
@@ -123,8 +154,15 @@ export class ModeBags {
     slope: null,
     deg: null,
     spac: null,
-    rakeIndex: 0,
     jackSide: 1,
+    rakeSet: false,
+    rakeMode: 'up',
+    rakeRemainderIn: 0,
+    rake: null,
+    hipShow: 0,
+    hipPitch: null,
+    hipDeg: null,
+    hipLength: null,
   }
 
   /** TECHNICAL: next SINE/COS is inverse (Jobber toggles after each press). */
@@ -142,8 +180,16 @@ export class ModeBags {
         diameter: null,
         deg: null,
         cord: null,
-        seg: null,
+        mo: null,
+        io: null,
+        arc: null,
+        cir: null,
+        areaSqIn: null,
         spac: null,
+        rakeSet: false,
+        rakeMode: 'down',
+        rakeRemainderIn: 0,
+        rake: null,
       }
     } else if (program === 'stairs') {
       this.stairs = {
@@ -173,8 +219,15 @@ export class ModeBags {
         slope: null,
         deg: null,
         spac: null,
-        rakeIndex: 0,
         jackSide: 1,
+        rakeSet: false,
+        rakeMode: 'up',
+        rakeRemainderIn: 0,
+        rake: null,
+        hipShow: 0,
+        hipPitch: null,
+        hipDeg: null,
+        hipLength: null,
       }
     }
   }
@@ -267,8 +320,11 @@ function handleTriangle(
   }
 
   const next = { ...inputs }
-  if (field === 'pitch') next.pitch = Math.abs(numFromDim(current, mode))
-  else if (field === 'deg') next.deg = numFromDim(current, mode)
+  if (field === 'pitch') {
+    const raw = Math.abs(numFromDim(current, mode))
+    // Jobber stores rise/run; we keep n/12 UX — ratio <1 → ×12
+    next.pitch = raw > 0 && raw < 1 ? raw * 12 : raw
+  } else if (field === 'deg') next.deg = numFromDim(current, mode)
   else next[field] = current
 
   const t = solveTriangle(next)
@@ -313,16 +369,97 @@ function ensureCircleRadius(c: ModeBags['circle']): number | null {
   return null
 }
 
-/** Segment height h from radius r and central angle deg. */
-function segmentHeight(r: number, deg: number): number {
-  const theta = deg2rad(Math.abs(deg))
-  return r * (1 - Math.cos(theta / 2))
+/** Sync Jobber circle derived fields (mo/io/arc/cir/area) when possible. */
+function refreshCircle(c: ModeBags['circle']): void {
+  let r = ensureCircleRadius(c)
+  if (r != null && r > 0) {
+    c.radius = Dimension.fromInches(r)
+    c.diameter = Dimension.fromInches(r * 2)
+    c.cir = Dimension.fromInches(2 * Math.PI * r)
+    c.areaSqIn = Math.PI * r * r
+  }
+  if (r != null && c.deg != null) {
+    const half = deg2rad(Math.abs(c.deg)) / 2
+    c.io = Dimension.fromInches(r * Math.cos(half))
+    c.mo = Dimension.fromInches(r - c.io.toInches())
+    c.cord = Dimension.fromInches(2 * r * Math.sin(half))
+    if (c.cir) {
+      c.arc = Dimension.fromInches(c.cir.toInches() * (Math.abs(c.deg) / 360))
+    }
+    return
+  }
+  if (r != null && c.cord) {
+    const half = c.cord.toInches() / 2
+    if (half > r + 1e-9) return
+    const io = Math.sqrt(Math.max(0, r * r - half * half))
+    if (io <= 0 || Math.abs(io - r) < 1e-12) return
+    c.io = Dimension.fromInches(io)
+    c.mo = Dimension.fromInches(r - io)
+    c.deg = rad2deg(2 * Math.atan(half / io))
+    if (c.cir) {
+      c.arc = Dimension.fromInches(c.cir.toInches() * (Math.abs(c.deg) / 360))
+    }
+    return
+  }
+  if (r != null && c.mo) {
+    const mo = c.mo.toInches()
+    if (mo <= 0 || mo > 2 * r) return
+    const io = r - mo
+    c.io = Dimension.fromInches(io)
+    if (io <= 0) return
+    c.cord = Dimension.fromInches(2 * Math.sqrt(Math.max(0, r * r - io * io)))
+    const half = c.cord.toInches() / 2
+    c.deg = rad2deg(2 * Math.atan(half / io))
+    if (c.cir) {
+      c.arc = Dimension.fromInches(c.cir.toInches() * (Math.abs(c.deg) / 360))
+    }
+  }
+  if (r != null && c.arc && c.cir) {
+    c.deg = (c.arc.toInches() / c.cir.toInches()) * 360
+    const half = deg2rad(Math.abs(c.deg)) / 2
+    c.io = Dimension.fromInches(r * Math.cos(half))
+    c.mo = Dimension.fromInches(r - c.io.toInches())
+    c.cord = Dimension.fromInches(2 * r * Math.sin(half))
+  }
 }
 
-/** Segment area (square inches) from r and central angle. */
-function segmentArea(r: number, deg: number): number {
-  const theta = deg2rad(Math.abs(deg))
-  return 0.5 * r * r * (theta - Math.sin(theta))
+/**
+ * Jobber circle SEG/+ segmented rise (jt.js plus + circle.rake_Set).
+ * Mode is always armed "down" by SEG; Spac sets step; + advances.
+ */
+function advanceCircleSeg(c: ModeBags['circle'], mode: DisplayMode): ModeResult {
+  const r = ensureCircleRadius(c)
+  if (r == null || r <= 0) throw new Error('Need RAD/Diam for SEG')
+  if (!c.spac || c.spac.toInches() <= 0) throw new Error('Need Spac for SEG')
+  refreshCircle(c)
+  const i = c.io?.toInches()
+  const cord = c.cord?.toInches()
+  if (i == null || cord == null || !(i > 0)) {
+    throw new Error('Need Cord or DEG so SEG can step')
+  }
+  const s = c.spac.toInches()
+  const a = cord * 0.5
+  const x = c.rakeRemainderIn + s
+  let h: number
+  if (c.rakeMode === 'up') {
+    // h = √(r² − (√(r²−i²) − x)²) − i
+    const halfChord = Math.sqrt(Math.max(0, r * r - i * i))
+    h = Math.sqrt(Math.max(0, r * r - (halfChord - x) ** 2)) - i
+  } else {
+    // Jobber down (SEG default): h = √(r² − (√(r²−i²) − (a − x))²) − i
+    const halfChord = Math.sqrt(Math.max(0, r * r - i * i))
+    h = Math.sqrt(Math.max(0, r * r - (halfChord - (a - x)) ** 2)) - i
+  }
+  c.rakeRemainderIn = x
+  if (!Number.isFinite(h)) {
+    c.rake = Dimension.zero()
+    return { value: Dimension.zero(), tape: 'SEG rise 0 (past segment)' }
+  }
+  c.rake = Dimension.fromInches(h)
+  return {
+    value: c.rake,
+    tape: `SEG rise ${c.rake.format(mode)} (x ${Dimension.fromInches(x).format(mode)})`,
+  }
 }
 
 function handleCircle(
@@ -335,24 +472,29 @@ function handleCircle(
   const c = bags.circle
 
   if (key === 'clrtr') {
+    if (current.toInches() <= 0) throw new Error('Spac must be > 0')
     c.spac = current
+    // Jobber: if rake not armed, also seed space used by stepper
     return { value: current, tape: `Spac <- ${current.format(mode)}` }
   }
   if (key === 'pitch') {
     if (current.toInches() <= 0) throw new Error('RAD must be > 0')
     c.radius = current
     c.diameter = Dimension.fromInches(current.toInches() * 2)
+    refreshCircle(c)
     return { value: current, tape: `RAD <- ${current.format(mode)}` }
   }
   if (key === 'rise') {
     if (current.toInches() <= 0) throw new Error('Diam must be > 0')
     c.diameter = current
     c.radius = Dimension.fromInches(current.toInches() / 2)
+    refreshCircle(c)
     return { value: current, tape: `Diam <- ${current.format(mode)}` }
   }
   if (key === 'deg') {
     c.deg = numFromDim(current, mode)
     if (Math.abs(c.deg) > 360) throw new Error('DEG must be ≤ 360')
+    refreshCircle(c)
     return {
       value: Dimension.fromFeet(c.deg),
       forceDec: true,
@@ -361,70 +503,165 @@ function handleCircle(
   }
   if (key === 'run') {
     c.cord = current
+    refreshCircle(c)
     return { value: current, tape: `Cord <- ${current.format(mode)}` }
   }
   if (key === 'slp') {
-    // SEG: store height, or compute from RAD+DEG when height not intended
+    // Jobber SEG: arm segmented-rise stepper (rake_mode=down); + advances
+    refreshCircle(c)
+    c.rakeSet = true
+    bags.roof.rakeSet = false
+    c.rakeMode = 'down'
+    c.rakeRemainderIn = 0
+    c.rake = Dimension.zero()
+    const mo = c.mo ?? Dimension.zero()
+    return {
+      value: mo,
+      tape: `SEG armed (M.O. ${mo.format(mode)}; set Spac then +)`,
+    }
+  }
+
+  // Circ / Area / ARC inverses (Jobber number_set false paths)
+  if (key === 'help') {
+    // Circ: input → radius = C/(2π); else display circumference
+    if (!current.isZero() && ensureCircleRadius(c) == null) {
+      const circ = current.toInches()
+      if (circ <= 0) throw new Error('Circ must be > 0')
+      const r = circ / (2 * Math.PI)
+      c.cir = current
+      c.radius = Dimension.fromInches(r)
+      c.diameter = Dimension.fromInches(r * 2)
+      refreshCircle(c)
+      return {
+        value: c.radius,
+        tape: `Circ <- ${current.format(mode)} → RAD ${c.radius.format(mode)}`,
+      }
+    }
     const r = ensureCircleRadius(c)
-    if (r != null && c.deg != null && current.isZero()) {
-      const h = segmentHeight(r, c.deg)
-      c.seg = Dimension.fromInches(h)
-      return {
-        value: c.seg,
-        tape: `SEG h ${c.seg.format(mode)}`,
-      }
+    if (r == null) throw new Error('Enter RAD, Diam, or Circ first')
+    refreshCircle(c)
+    const circ = c.cir ?? Dimension.fromInches(2 * Math.PI * r)
+    return {
+      value: circ,
+      tape: `Circ ${circ.format(mode)}`,
     }
-    if (r != null && current.toInches() > 0) {
-      if (current.toInches() > 2 * r) throw new Error('SEG > diameter')
-      c.seg = current
-      // Derive central angle from segment height: h = r(1-cos(θ/2))
-      const h = current.toInches()
-      const cosHalf = 1 - h / r
-      if (Math.abs(cosHalf) > 1) throw new Error('Invalid SEG for radius')
-      c.deg = rad2deg(2 * Math.acos(Math.min(1, Math.max(-1, cosHalf))))
-      return {
-        value: current,
-        tape: `SEG <- ${current.format(mode)} (DEG ${c.deg.toFixed(2)})`,
-      }
-    }
-    c.seg = current
-    return { value: current, tape: `SEG <- ${current.format(mode)}` }
   }
 
-  const r = ensureCircleRadius(c)
-  if (r == null && ['area', 'help', 'retr', 'dmsin'].includes(key)) {
-    throw new Error('Enter RAD or Diam first')
-  }
-
-  if (key === 'area' && r != null) {
-    // If DEG set, return segment area; else full circle
+  if (key === 'area') {
+    // Area input → radius (jobberh.js documents inverse; jt.js display path)
+    if (!current.isZero() && ensureCircleRadius(c) == null) {
+      let areaSqIn: number
+      if (mode === 'MET') {
+        areaSqIn = Math.abs(current.toMm()) ** 2 / (25.4 ** 2)
+      } else if (mode === 'INCH') {
+        areaSqIn = Math.abs(current.toInches())
+      } else {
+        // DEC/FIS: Jobber area is sq ft
+        areaSqIn = Math.abs(current.toFeet()) * 144
+      }
+      if (areaSqIn <= 0) throw new Error('Area must be > 0')
+      const r = Math.sqrt(areaSqIn / Math.PI)
+      c.areaSqIn = areaSqIn
+      c.radius = Dimension.fromInches(r)
+      c.diameter = Dimension.fromInches(r * 2)
+      refreshCircle(c)
+      return {
+        value: c.radius,
+        tape: `Area <- → RAD ${c.radius.format(mode)}`,
+      }
+    }
+    const r = ensureCircleRadius(c)
+    if (r == null) throw new Error('Enter RAD or Diam first')
+    refreshCircle(c)
     if (c.deg != null && Math.abs(c.deg) < 360 - 1e-9) {
-      const a = segmentArea(r, c.deg)
+      const theta = deg2rad(Math.abs(c.deg))
+      const a = 0.5 * r * r * (theta - Math.sin(theta))
       const sqft = a / 144
       return {
         value: Dimension.fromFeet(sqft),
+        forceDec: true,
         tape: `SegArea ${sqft.toFixed(4)} ft2`,
       }
     }
     const sqft = (Math.PI * r * r) / 144
-    return { value: Dimension.fromFeet(sqft), tape: `Area ${sqft.toFixed(4)} ft2` }
-  }
-  if (key === 'help' && r != null) {
-    const circ = 2 * Math.PI * r
     return {
-      value: Dimension.fromInches(circ),
-      tape: `Circ ${Dimension.fromInches(circ).format(mode)}`,
+      value: Dimension.fromFeet(sqft),
+      forceDec: true,
+      tape: `Area ${sqft.toFixed(4)} ft2`,
     }
   }
-  if (key === 'retr' && r != null) {
+
+  if (key === 'retr') {
+    // ARC input (Jobber) or display
+    if (!current.isZero()) {
+      c.arc = current
+      const r0 = ensureCircleRadius(c)
+      if (r0 != null && r0 > 0) {
+        c.cir = Dimension.fromInches(2 * Math.PI * r0)
+        c.deg = (c.arc.toInches() / c.cir.toInches()) * 360
+        refreshCircle(c)
+        return {
+          value: c.arc,
+          tape: `ARC <- ${current.format(mode)} (DEG ${c.deg!.toFixed(2)})`,
+        }
+      }
+      if (c.cord) {
+        // Jobber solve_CordArc iterative angle search
+        const cord = c.cord.toInches()
+        const arcLen = c.arc.toInches()
+        if (cord <= 0 || arcLen <= 0) throw new Error('Cord/ARC must be > 0')
+        let ang = 4
+        let incr = 4
+        const arc2crd = arcLen / cord
+        for (let ct = 0; ct < 75; ct++) {
+          const angratio = ang / (2 * Math.sin(ang / 2))
+          if (angratio > arc2crd) {
+            incr /= 2
+            ang -= incr
+          } else {
+            incr *= 2
+            ang += incr
+          }
+        }
+        const rr = cord / 2 / Math.sin(ang / 2)
+        c.radius = Dimension.fromInches(rr)
+        c.diameter = Dimension.fromInches(rr * 2)
+        c.deg = rad2deg(ang)
+        refreshCircle(c)
+        return {
+          value: c.radius,
+          tape: `ARC+Cord → RAD ${c.radius.format(mode)} (DEG ${c.deg!.toFixed(2)})`,
+        }
+      }
+      return { value: current, tape: `ARC <- ${current.format(mode)}` }
+    }
+    const r = ensureCircleRadius(c)
+    if (r == null) throw new Error('Enter RAD or Diam first')
+    refreshCircle(c)
     const deg = c.deg ?? 360
-    const arc = r * deg2rad(deg)
+    const arc = c.arc ?? Dimension.fromInches(r * deg2rad(deg))
     return {
-      value: Dimension.fromInches(arc),
-      tape: `ARC ${Dimension.fromInches(arc).format(mode)}`,
+      value: arc,
+      tape: `ARC ${arc.format(mode)}`,
     }
   }
-  if (key === 'dmsin' && r != null) {
+
+  if (key === 'dmsin') {
+    // M.O. input or display
+    if (!current.isZero()) {
+      c.mo = current
+      refreshCircle(c)
+      return { value: current, tape: `M.O. <- ${current.format(mode)}` }
+    }
+    const r = ensureCircleRadius(c)
+    if (r == null) throw new Error('Enter RAD or Diam first')
+    refreshCircle(c)
+    if (c.mo) {
+      return {
+        value: c.mo,
+        tape: `M.O. ${c.mo.format(mode)}`,
+      }
+    }
     if (c.cord) {
       const half = c.cord.toInches() / 2
       if (half > r + 1e-9) throw new Error('Cord > diameter')
@@ -432,16 +669,10 @@ function handleCircle(
         return { value: Dimension.zero(), tape: 'M.O. 0 (cord = diameter)' }
       }
       const mo = r - Math.sqrt(Math.max(0, r * r - half * half))
+      c.mo = Dimension.fromInches(mo)
       return {
-        value: Dimension.fromInches(mo),
-        tape: `M.O. ${Dimension.fromInches(mo).format(mode)}`,
-      }
-    }
-    if (c.deg != null) {
-      const h = segmentHeight(r, c.deg)
-      return {
-        value: Dimension.fromInches(h),
-        tape: `M.O. ${Dimension.fromInches(h).format(mode)} (from DEG)`,
+        value: c.mo,
+        tape: `M.O. ${c.mo.format(mode)}`,
       }
     }
     return { value: Dimension.fromInches(r), tape: 'M.O. (enter Cord or DEG)' }
@@ -810,7 +1041,7 @@ function handleOblique(
   }
   if (key === 'help' || key === 'clrtr') {
     bags.clear('oblique')
-    return { tape: 'cleared oblique', value: Dimension.zero() }
+    return { tape: '… clear oblique', value: Dimension.zero() }
   }
 
   return { value: current, tape: label }
@@ -920,16 +1151,13 @@ function handleTechnical(
 }
 
 /**
- * Roof helpers (MVP+ practical, not full Jobber Instruments clone):
- * - Regular HIP = √(common² + run²) = √(rise² + 2·run²) (Jobber jt.js square plan)
- * - Irregular HIP/VALLEY: pitch + pitch2 + run on primary side,
- *   rise = run×p1/12; run2 = rise×12/p2; hip/val = √(run²+run2²+rise²)
- *   (same intersection length; secondary common = √(run2²+rise²))
- * - After irregular HIP, press Rise → run2; press DEG (0) → toggle jack side
- *   (primary pitch vs pitch2) for Rk-Up / Rk-Dn sequencing
- * - Jack length at bay n: common − n × spac × √(1+(p/12)²)
- *   Enter bay # then Rk-Up to jump; value returns jack when common known
- * - Rk-Up / Rk-Dn: plumb n × spac × (pitch/12); stops when jack ≤ 0
+ * Roof helpers aligned with Jobber jt.js:
+ * - Regular HIP = √(common² + run²) = √(rise² + 2·run²) (square plan)
+ * - Irregular HIP/VALLEY: pitch + pitch2 + run → √(run²+run2²+rise²)
+ * - HIP key cycles hip tan → angle → length (Jobber showHip)
+ * - Rk-Up / Rk-Dn arm rake_Set; + advances plumb = tan(deg)×remainder
+ * - Pitch UX: enter n for n/12 (construction); Jobber stores rise/run ratio
+ *   (math equivalent via atan(p/12)). Triangle pitch auto-flows to roof.
  */
 function irregularPlan(r: ModeBags['roof']): {
   run1: number
@@ -963,6 +1191,101 @@ function ensureRoofCommon(r: ModeBags['roof']): Dimension | null {
   return null
 }
 
+function activeRoofPitch(r: ModeBags['roof']): number | null {
+  if (r.jackSide === 2 && r.pitch2 != null) return r.pitch2
+  return r.pitch
+}
+
+function syncRoofFromPitch(r: ModeBags['roof']): void {
+  const p = activeRoofPitch(r)
+  if (p == null) return
+  r.deg = rad2deg(Math.atan(p / 12))
+  if (r.run != null && r.rise == null) {
+    r.rise = Dimension.fromInches((p / 12) * r.run.toInches())
+  }
+  if (r.rise != null && r.run != null) {
+    const rise = r.rise.toInches()
+    const run = r.run.toInches()
+    r.slope = Dimension.fromInches(Math.hypot(rise, run))
+  } else if (r.pitch != null && r.slope != null && r.run == null && r.rise == null) {
+    const factor = Math.sqrt(1 + (r.pitch / 12) ** 2)
+    const run = r.slope.toInches() / factor
+    r.run = Dimension.fromInches(run)
+    r.rise = Dimension.fromInches((r.pitch / 12) * run)
+  }
+}
+
+function computeHipFields(r: ModeBags['roof']): void {
+  const irr = irregularPlan(r)
+  if (irr) {
+    r.rise = Dimension.fromInches(irr.rise)
+    r.hipLength = Dimension.fromInches(irr.hipVal)
+    const rn = Math.sqrt(Math.max(0, irr.hipVal * irr.hipVal - irr.rise * irr.rise))
+    r.hipPitch = rn > 0 ? irr.rise / rn : null // Jobber ratio (not /12)
+    r.hipDeg = r.hipPitch != null ? rad2deg(Math.atan(r.hipPitch)) : null
+    return
+  }
+  ensureRoofCommon(r)
+  if (!r.slope || !r.run || !r.rise) return
+  const hip = Math.sqrt(r.slope.toInches() ** 2 + r.run.toInches() ** 2)
+  r.hipLength = Dimension.fromInches(hip)
+  const rise = r.rise.toInches()
+  const rn = Math.sqrt(Math.max(0, hip * hip - rise * rise))
+  r.hipPitch = rn > 0 ? rise / rn : null
+  r.hipDeg = r.hipPitch != null ? rad2deg(Math.atan(r.hipPitch)) : null
+}
+
+/** Jobber roof Rk-Up/Dn + : plumb rise = tan(deg) × horizontal remainder. */
+function advanceRoofRake(r: ModeBags['roof'], mode: DisplayMode): ModeResult {
+  if (!r.spac || r.spac.toInches() <= 0) throw new Error('Need Spac for Rk')
+  const p = activeRoofPitch(r)
+  if (p == null) throw new Error('Need pitch for Rk')
+  const deg = rad2deg(Math.atan(p / 12))
+  const spac = r.spac.toInches()
+  const riseMax = r.rise?.toInches() ?? null
+
+  if (r.rakeMode === 'up') {
+    r.rakeRemainderIn += spac
+    let rake = Math.tan(deg2rad(deg)) * r.rakeRemainderIn
+    if (riseMax != null && rake >= riseMax) {
+      rake = riseMax
+      r.rakeSet = false
+    }
+    r.rake = Dimension.fromInches(rake)
+  } else {
+    r.rakeRemainderIn -= spac
+    let rake = Math.tan(deg2rad(deg)) * r.rakeRemainderIn
+    if (rake <= 0) {
+      rake = 0
+      r.rakeSet = false
+    }
+    r.rake = Dimension.fromInches(rake)
+  }
+  const side = r.jackSide === 2 ? ' side2' : ''
+  return {
+    value: r.rake!,
+    tape: `Rk-${r.rakeMode === 'up' ? 'Up' : 'Dn'}${side} ${r.rake!.format(mode)}`,
+  }
+}
+
+/**
+ * When + is pressed and a Jobber rake/SEG stepper is armed, advance it
+ * instead of doing arithmetic (jt.js plus handler).
+ */
+export function tryAdvancePlusStepper(
+  program: CalcProgram,
+  bags: ModeBags,
+  mode: DisplayMode,
+): ModeResult | null {
+  if (program === 'circle' && bags.circle.rakeSet) {
+    return advanceCircleSeg(bags.circle, mode)
+  }
+  if ((program === 'roof' || program === 'triangle') && bags.roof.rakeSet) {
+    return advanceRoofRake(bags.roof, mode)
+  }
+  return null
+}
+
 function handleRoof(
   key: FnKeyId,
   current: Dimension,
@@ -979,32 +1302,34 @@ function handleRoof(
   if (key === 'clrtr') {
     if (current.toInches() <= 0) throw new Error('Spac must be > 0')
     r.spac = current
-    r.rakeIndex = 0
     return { value: current, tape: `Spac <- ${current.format(mode)}` }
   }
   if (key === 'pitch') {
     const p = Math.abs(numFromDim(current, mode))
     if (p === 0) throw new Error('pitch must be > 0')
-    if (r.pitch != null && Math.abs(r.pitch - p) > 1e-9) {
-      // Second distinct pitch → irregular hip/valley support
-      r.pitch2 = p
+    // Accept Jobber ratio (<1) or construction n/12 (>=1): store as n/12
+    const asPer12 = p < 1 ? p * 12 : p
+    if (r.pitch != null && Math.abs(r.pitch - asPer12) > 1e-9) {
+      r.pitch2 = asPer12
       r.jackSide = 1
+      syncRoofFromPitch(r)
       return {
-        value: Dimension.fromFeet(p),
+        value: Dimension.fromFeet(asPer12),
         forceDec: true,
-        tape: `pitch2 ${p}/12 (irreg: pitch ${r.pitch}/12 + pitch2 — then Run → HIP)`,
+        tape: `pitch2 ${asPer12}/12 (irreg: pitch ${r.pitch}/12 + pitch2 — then Run → HIP)`,
       }
     }
-    // Same pitch again refreshes primary; clears stale pitch2 mismatch UX
-    if (r.pitch != null && Math.abs(r.pitch - p) <= 1e-9 && r.pitch2 != null) {
-      r.pitch = p
+    if (r.pitch != null && Math.abs(r.pitch - asPer12) <= 1e-9 && r.pitch2 != null) {
+      r.pitch = asPer12
+      syncRoofFromPitch(r)
       return {
-        value: Dimension.fromFeet(p),
+        value: Dimension.fromFeet(asPer12),
         forceDec: true,
-        tape: `pitch ${p}/12 (kept pitch2 ${r.pitch2}/12)`,
+        tape: `pitch ${asPer12}/12 (kept pitch2 ${r.pitch2}/12)`,
       }
     }
-    r.pitch = p
+    r.pitch = asPer12
+    syncRoofFromPitch(r)
     return {
       value: Dimension.fromFeet(r.pitch),
       forceDec: true,
@@ -1012,24 +1337,17 @@ function handleRoof(
     }
   }
   if (key === 'deg') {
-    // With irregular plan ready: enter 0 then DEG toggles jack side (1↔2)
     const raw = numFromDim(current, mode)
-    if (
-      r.pitch2 != null &&
-      r.pitch != null &&
-      current.isZero()
-    ) {
+    if (r.pitch2 != null && r.pitch != null && current.isZero()) {
       r.jackSide = r.jackSide === 1 ? 2 : 1
       const p = r.jackSide === 2 ? r.pitch2 : r.pitch
       return {
         value: Dimension.fromFeet(p),
         forceDec: true,
-        tape: `jack side ${r.jackSide} (pitch ${p}/12) — use Rk-Up/Rk-Dn`,
+        tape: `jack side ${r.jackSide} (pitch ${p}/12) — Rk-Up/Rk-Dn then +`,
       }
     }
-    const degIn = raw
-    // Accept packed DMS on DEG entry in roof mode
-    r.deg = Math.abs(degIn) < 360 ? parseDmsInput(degIn) : degIn
+    r.deg = Math.abs(raw) < 360 ? parseDmsInput(raw) : raw
     r.pitch = 12 * Math.tan(deg2rad(r.deg))
     const parts = decimalToDms(r.deg)
     return {
@@ -1056,7 +1374,6 @@ function handleRoof(
     r.deg = run === 0 ? 90 : rad2deg(Math.atan(rise / run))
   }
   if (r.pitch != null && r.slope != null && r.run == null && r.rise == null) {
-    // Recover rise/run from common (slope) + pitch
     const factor = Math.sqrt(1 + (r.pitch / 12) ** 2)
     const run = r.slope.toInches() / factor
     r.run = Dimension.fromInches(run)
@@ -1064,31 +1381,43 @@ function handleRoof(
   }
 
   if (key === 'help') {
-    // HIP / VALLEY — irregular if pitch2 set with run
-    const irr = irregularPlan(r)
-    if (irr) {
-      r.rise = Dimension.fromInches(irr.rise)
-      r.jackSide = 1
+    // Jobber HIP cycles: tan → angle → length
+    computeHipFields(r)
+    if (r.hipShow > 2) r.hipShow = 0
+    const step = r.hipShow
+    r.hipShow = (r.hipShow + 1) % 3
+    if (step === 0) {
+      if (r.hipPitch == null) throw new Error('Need pitch+run (or Rise/Run) for HIP')
       return {
-        value: Dimension.fromInches(irr.hipVal),
-        tape: `HIP/VAL irr ${Dimension.fromInches(irr.hipVal).format(mode)} (p ${r.pitch}/12·p2 ${r.pitch2}/12; run2 ${Dimension.fromInches(irr.run2).format(mode)}; SLP2 ${Dimension.fromInches(irr.common2).format(mode)}; DEG 0=toggle jack side)`,
+        value: Dimension.fromFeet(r.hipPitch),
+        forceDec: true,
+        tape: `hip tan: ${r.hipPitch.toFixed(6)} (ratio)`,
       }
     }
-    if (!r.slope || !r.run) throw new Error('Need Rise/Run or Pitch+Run')
-    // Jobber: hip_length = √(common² + run²) = √(rise² + 2·run²) for square plan
-    const hip = Math.sqrt(r.slope.toInches() ** 2 + r.run.toInches() ** 2)
-    const hipPitch = r.rise
-      ? (r.rise.toInches() / Math.sqrt(hip * hip - r.rise.toInches() ** 2)) * 12
-      : null
-    const hipNote =
-      hipPitch != null ? `; hip pitch ${hipPitch.toFixed(4)}/12` : ''
+    if (step === 1) {
+      if (r.hipDeg == null) throw new Error('Need pitch+run for hip angle')
+      const parts = decimalToDms(r.hipDeg)
+      return {
+        value: Dimension.fromFeet(r.hipDeg),
+        forceDec: true,
+        dmsDisplay: formatDmsDisplay(parts),
+        tape: `hip angle: ${r.hipDeg.toFixed(4)}°`,
+      }
+    }
+    if (r.hipLength == null) throw new Error('Need Rise/Run or Pitch+Run for hip length')
+    const irr = irregularPlan(r)
+    if (irr) {
+      return {
+        value: r.hipLength,
+        tape: `hip length: ${r.hipLength.format(mode)} (irr p ${r.pitch}/12·p2 ${r.pitch2}/12; run2 ${Dimension.fromInches(irr.run2).format(mode)})`,
+      }
+    }
     return {
-      value: Dimension.fromInches(hip),
-      tape: `HIP/VAL ${Dimension.fromInches(hip).format(mode)}${hipNote}`,
+      value: r.hipLength,
+      tape: `hip length: ${r.hipLength.format(mode)}`,
     }
   }
 
-  // After Rise with irregular plan: show secondary run (valley/hip plan width)
   if (key === 'rise' && r.rise) {
     const irr = irregularPlan(r)
     if (irr) {
@@ -1111,74 +1440,36 @@ function handleRoof(
     return { value: r.slope, tape: `SLP ${r.slope.format(mode)}` }
   }
 
-  if (key === 'dmsin' || key === 'retr') {
-    if (r.pitch == null || !r.spac) throw new Error('Need pitch & Spac')
-    const spac = r.spac.toInches()
-    if (spac <= 0) throw new Error('Spac must be > 0')
-
-    // Active pitch for this rake sequence (side 2 needs pitch2)
-    const activePitch =
-      r.jackSide === 2 && r.pitch2 != null ? r.pitch2 : r.pitch
-    if (activePitch == null) throw new Error('Need pitch')
-
-    const unit = (activePitch / 12) * spac
-    const factor = Math.sqrt(1 + (activePitch / 12) ** 2)
-
-    // Common length: primary SLP, or SLP2 when jacking secondary side
-    let commonIn: number | null = null
-    if (r.jackSide === 2 && r.pitch2 != null) {
-      const irr = irregularPlan(r)
-      if (irr) commonIn = irr.common2
-      else if (r.run) {
-        const rise = (r.pitch! / 12) * r.run.toInches()
-        const run2 = (rise * 12) / r.pitch2
-        commonIn = Math.hypot(run2, rise)
-      }
-    } else {
-      const common = ensureRoofCommon(r)
-      commonIn = common ? common.toInches() : null
-    }
-
-    // Jump to bay: enter integer 1–48 in DEC, then Rk-Up (avoids treating jack lengths as bays)
-    const raw = numFromDim(current, mode)
-    const entered = Math.round(Math.abs(raw))
-    const jumpBay =
-      key === 'dmsin' &&
-      mode === 'DEC' &&
-      entered >= 1 &&
-      entered <= 48 &&
-      Math.abs(raw - entered) < 1e-9 &&
-      !current.isZero()
-    if (jumpBay) {
-      r.rakeIndex = entered
-    } else if (key === 'dmsin') {
-      r.rakeIndex = Math.max(1, r.rakeIndex + 1)
-    } else {
-      r.rakeIndex = Math.max(1, r.rakeIndex - 1)
-    }
-
-    const n = r.rakeIndex
-    const plumb = n * unit
-    let jackIn: number | null = null
-    if (commonIn != null) {
-      const drop = n * spac * factor
-      jackIn = commonIn - drop
-      if (jackIn <= 0) {
-        r.rakeIndex = Math.max(1, n - 1)
-        throw new Error(`Jack ≤ 0 at bay #${n} (last #${r.rakeIndex})`)
-      }
-    }
-
-    const sideNote = r.jackSide === 2 ? ' side2' : ''
-    if (jackIn != null) {
-      return {
-        value: Dimension.fromInches(jackIn),
-        tape: `${label} #${n}${sideNote} jack ${Dimension.fromInches(jackIn).format(mode)} (plumb ${Dimension.fromInches(Math.abs(plumb)).format(mode)}; p ${activePitch}/12)`,
-      }
-    }
+  if (key === 'dmsin') {
+    // Jobber Rk-Up: arm up, remainder=0, show 0; then + advances
+    if (activeRoofPitch(r) == null) throw new Error('Need pitch for Rk-Up')
+    if (!r.spac) throw new Error('Need Spac for Rk-Up')
+    syncRoofFromPitch(r)
+    r.rakeSet = true
+    bags.circle.rakeSet = false
+    r.rakeMode = 'up'
+    r.rakeRemainderIn = 0
+    r.rake = Dimension.zero()
     return {
-      value: Dimension.fromInches(Math.abs(plumb)),
-      tape: `${label} #${n}${sideNote} plumb ${Dimension.fromInches(Math.abs(plumb)).format(mode)} (enter SLP/common for jack)`,
+      value: Dimension.zero(),
+      tape: 'Rk-Up armed (tap + for each rise)',
+    }
+  }
+
+  if (key === 'retr') {
+    // Jobber Rk-Dn: arm down, remainder=run, show rise; then + advances
+    syncRoofFromPitch(r)
+    if (activeRoofPitch(r) == null) throw new Error('Need pitch for Rk-Dn')
+    if (!r.spac) throw new Error('Need Spac for Rk-Dn')
+    if (!r.run || !r.rise) throw new Error('Need Run & Rise for Rk-Dn')
+    r.rakeSet = true
+    bags.circle.rakeSet = false
+    r.rakeMode = 'down'
+    r.rakeRemainderIn = r.run.toInches()
+    r.rake = r.rise
+    return {
+      value: r.rake,
+      tape: `Rk-Dn armed (${r.rake.format(mode)}; tap + to step down)`,
     }
   }
 
@@ -1187,7 +1478,7 @@ function handleRoof(
     if (irr) {
       return {
         value: r.run,
-        tape: `Run <- ${current.format(mode)} (irreg ready: HIP → length; Rise → run2)`,
+        tape: `Run <- ${current.format(mode)} (irreg ready: HIP → tan/angle/length)`,
       }
     }
     return { value: r.run, tape: `Run <- ${current.format(mode)}` }

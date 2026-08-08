@@ -138,11 +138,13 @@ describe('CIRCLE workflows', () => {
 })
 
 describe('ROOF workflows', () => {
-  it('pitch + run → rise and regular HIP ×√2', () => {
+  it('pitch + run → rise and HIP length on 3rd HIP press', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
     expect(bags.roof.rise!.toInches()).toBeCloseTo(72, 5)
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     expect(hip.value!.toInches()).toBeCloseTo(
       Math.sqrt(bags.roof.slope!.toInches() ** 2 + bags.roof.run!.toInches() ** 2),

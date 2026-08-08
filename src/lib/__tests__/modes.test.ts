@@ -7,7 +7,7 @@ import {
   type CalcProgram,
 } from '../programs.ts'
 import { Dimension } from '../dimension.ts'
-import { handleProgramKey, ModeBags } from '../modeSolvers.ts'
+import { handleProgramKey, ModeBags, tryAdvancePlusStepper } from '../modeSolvers.ts'
 import { parseDmsInput, dmsToDecimal, decimalToDms } from '../dms.ts'
 
 describe('6 Jobber programs', () => {
@@ -37,14 +37,19 @@ describe('6 Jobber programs', () => {
     expect(circ.value!.toInches()).toBeCloseTo(Math.PI * 24, 5)
   })
 
-  it('circle: DEG + RAD → segment height via SEG', () => {
+  it('circle: SEG arms stepper and shows M.O.; Spac + + advances', () => {
     const bags = new ModeBags()
     handleProgramKey('circle', 'pitch', Dimension.fromInches(12), 'INCH', bags, {})
     handleProgramKey('circle', 'deg', Dimension.fromFeet(90), 'DEC', bags, {})
     const seg = handleProgramKey('circle', 'slp', Dimension.zero(), 'INCH', bags, {})
-    // h = r(1-cos(θ/2)) for 90° → 12(1-cos(45°))
+    // M.O. = r(1-cos(θ/2)) for 90°
     const expected = 12 * (1 - Math.cos(Math.PI / 4))
     expect(seg.value!.toInches()).toBeCloseTo(expected, 5)
+    expect(bags.circle.rakeSet).toBe(true)
+    handleProgramKey('circle', 'clrtr', Dimension.fromInches(1), 'INCH', bags, {})
+    const step = tryAdvancePlusStepper('circle', bags, 'INCH')!
+    expect(step.value!.toInches()).toBeGreaterThan(0)
+    expect(bags.circle.rakeRemainderIn).toBeCloseTo(1, 8)
   })
 
   it('circle: rejects Cord > diameter for M.O.', () => {
@@ -93,12 +98,14 @@ describe('6 Jobber programs', () => {
     expect(str.value!.toInches()).toBeCloseTo(Math.hypot(7, 10) * 13, 5)
   })
 
-  it('roof: pitch + run → rise/slope and regular HIP', () => {
+  it('roof: pitch + run → rise/slope and regular HIP length (3rd HIP)', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
     expect(bags.roof.rise!.toInches()).toBeCloseTo(72, 5)
-    const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {}) // tan
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {}) // angle
+    const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {}) // length
     expect(hip.value!.toInches()).toBeCloseTo(
       Math.sqrt(bags.roof.slope!.toInches() ** 2 + bags.roof.run!.toInches() ** 2),
       5,
@@ -112,23 +119,27 @@ describe('6 Jobber programs', () => {
     expect(bags.roof.pitch).toBe(6)
     expect(bags.roof.pitch2).toBe(8)
     handleProgramKey('roof', 'run', Dimension.fromInches(120), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     const rise = (6 / 12) * 120
     const run2 = (rise * 12) / 8
     const expected = Math.sqrt(120 ** 2 + run2 ** 2 + rise ** 2)
     expect(hip.value!.toInches()).toBeCloseTo(expected, 4)
-    expect(hip.tape).toMatch(/irr/)
+    expect(hip.tape).toMatch(/hip length/)
   })
 
-  it('roof: Rk-Up sequence advances bay index', () => {
+  it('roof: Rk-Up arms then + advances plumb rise (Jobber)', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'clrtr', Dimension.fromInches(24), 'INCH', bags, {})
-    const r1 = handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
-    const r2 = handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
-    expect(r1.value!.toInches()).toBeCloseTo(12, 5) // 1 * 24 * 6/12
+    const arm = handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
+    expect(arm.value!.toInches()).toBe(0)
+    expect(bags.roof.rakeSet).toBe(true)
+    const r1 = tryAdvancePlusStepper('roof', bags, 'INCH')!
+    const r2 = tryAdvancePlusStepper('roof', bags, 'INCH')!
+    expect(r1.value!.toInches()).toBeCloseTo(12, 5) // tan(atan(0.5))*24
     expect(r2.value!.toInches()).toBeCloseTo(24, 5)
-    expect(r2.tape).toMatch(/#2/)
   })
 
   it('oblique: SSS solves angles', () => {
@@ -212,36 +223,39 @@ describe('multi-memory', () => {
 })
 
 describe('depth helpers', () => {
-  it('roof: irregular HIP/VAL reports run2 and SLP2', () => {
+  it('roof: irregular HIP length tape reports run2', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(8), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(120), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
-    expect(hip.tape).toMatch(/HIP\/VAL irr/)
+    expect(hip.tape).toMatch(/hip length/)
     expect(hip.tape).toMatch(/run2/)
-    expect(hip.tape).toMatch(/SLP2/)
   })
 
-  it('roof: jack sequence returns jack length when common known', () => {
+  it('roof: Rk-Up + returns Jobber plumb tan(deg)×space (not jack common)', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
     handleProgramKey('roof', 'clrtr', Dimension.fromInches(24), 'INCH', bags, {})
-    const common = bags.roof.slope!.toInches()
-    const j1 = handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
-    const drop = 24 * Math.sqrt(1 + (6 / 12) ** 2)
-    expect(j1.value!.toInches()).toBeCloseTo(common - drop, 4)
-    expect(j1.tape).toMatch(/jack/)
+    handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
+    const j1 = tryAdvancePlusStepper('roof', bags, 'INCH')!
+    expect(j1.value!.toInches()).toBeCloseTo(12, 4)
+    expect(j1.tape).toMatch(/Rk-Up/)
   })
 
-  it('roof: DEC bay jump then Rk-Up', () => {
+  it('roof: Rk-Dn arms at full rise then + steps down', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
+    handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
     handleProgramKey('roof', 'clrtr', Dimension.fromInches(24), 'INCH', bags, {})
-    const r = handleProgramKey('roof', 'dmsin', Dimension.fromFeet(3), 'DEC', bags, {})
-    expect(r.tape).toMatch(/#3/)
-    expect(r.value!.toInches()).toBeCloseTo(36, 5)
+    const arm = handleProgramKey('roof', 'retr', Dimension.zero(), 'INCH', bags, {})
+    expect(arm.value!.toInches()).toBeCloseTo(72, 5)
+    const step = tryAdvancePlusStepper('roof', bags, 'INCH')!
+    // remainder 144-24=120; tan*120 = 60
+    expect(step.value!.toInches()).toBeCloseTo(60, 5)
   })
 
   it('stairs: nose is nose-to-nose √(riser²+tread²); pitch = riser/tread×12', () => {
@@ -278,25 +292,22 @@ describe('depth helpers', () => {
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(8), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(120), 'INCH', bags, {})
     expect(bags.roof.jackSide).toBe(1)
-    const t = handleProgramKey('roof', 'deg', Dimension.zero(), 'DEC', bags, {})
+    const tog = handleProgramKey('roof', 'deg', Dimension.zero(), 'DEC', bags, {})
     expect(bags.roof.jackSide).toBe(2)
-    expect(t.tape).toMatch(/jack side 2/)
+    expect(tog.tape).toMatch(/jack side 2/)
   })
 
-  it('roof: side2 jack uses pitch2 common', () => {
+  it('roof: side2 Rk-Up + uses pitch2 plumb', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(8), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(120), 'INCH', bags, {})
     handleProgramKey('roof', 'clrtr', Dimension.fromInches(24), 'INCH', bags, {})
     bags.roof.jackSide = 2
-    const rise = (6 / 12) * 120
-    const run2 = (rise * 12) / 8
-    const common2 = Math.hypot(run2, rise)
-    const factor2 = Math.sqrt(1 + (8 / 12) ** 2)
-    const j1 = handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
+    handleProgramKey('roof', 'dmsin', Dimension.zero(), 'INCH', bags, {})
+    const j1 = tryAdvancePlusStepper('roof', bags, 'INCH')!
     expect(j1.tape).toMatch(/side2/)
-    expect(j1.value!.toInches()).toBeCloseTo(common2 - 24 * factor2, 3)
+    expect(j1.value!.toInches()).toBeCloseTo((8 / 12) * 24, 3)
   })
 
   it('stairs: steep stringer notes headroom', () => {
@@ -351,6 +362,8 @@ describe('Jobber oracle alignment (jt.js)', () => {
     const bags = new ModeBags()
     handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
     handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
     const expected = Math.sqrt(bags.roof.slope!.toInches() ** 2 + 144 ** 2)
     expect(hip.value!.toInches()).toBeCloseTo(expected, 4)
@@ -401,5 +414,77 @@ describe('Jobber oracle alignment (jt.js)', () => {
     handleProgramKey('oblique', 'rise', Dimension.fromInches(3), 'INCH', bags, {})
     handleProgramKey('oblique', 'slp', Dimension.fromFeet(30), 'DEC', bags, {})
     expect(bags.oblique.A!).toBeGreaterThan(90)
+  })
+})
+
+describe('Jobber parity gaps (jt.js)', () => {
+  it('HIP key cycles tan → angle → length', () => {
+    const bags = new ModeBags()
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
+    handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
+    const tan = handleProgramKey('roof', 'help', Dimension.zero(), 'DEC', bags, {})
+    expect(tan.tape).toMatch(/hip tan/)
+    expect(tan.value!.toFeet()).toBeLessThan(1)
+    const ang = handleProgramKey('roof', 'help', Dimension.zero(), 'DEC', bags, {})
+    expect(ang.tape).toMatch(/hip angle/)
+    const len = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    expect(len.tape).toMatch(/hip length/)
+    expect(len.value!.toInches()).toBeGreaterThan(144)
+  })
+
+  it('triangle pitch auto-flows to roof', () => {
+    const eng = new CalcEngine()
+    eng.setProgram('triangle')
+    eng.setMode('DEC')
+    eng.inputDigit(6)
+    eng.handleProgramFn('pitch')
+    expect(eng.getBags().roof.pitch).toBeCloseTo(6, 8)
+  })
+
+  it('circle Circ / Area / ARC invert to radius', () => {
+    const bags = new ModeBags()
+    const circ = Dimension.fromInches(2 * Math.PI * 10)
+    const fromCirc = handleProgramKey('circle', 'help', circ, 'INCH', bags, {})
+    expect(fromCirc.value!.toInches()).toBeCloseTo(10, 5)
+
+    const bags2 = new ModeBags()
+    const areaFt2 = Dimension.fromFeet((Math.PI * 10 * 10) / 144)
+    const fromArea = handleProgramKey('circle', 'area', areaFt2, 'DEC', bags2, {})
+    expect(fromArea.value!.toInches()).toBeCloseTo(10, 4)
+
+    const bags3 = new ModeBags()
+    handleProgramKey('circle', 'pitch', Dimension.fromInches(10), 'INCH', bags3, {})
+    const arc = handleProgramKey(
+      'circle',
+      'retr',
+      Dimension.fromInches(10 * (Math.PI / 2)),
+      'INCH',
+      bags3,
+      {},
+    )
+    expect(bags3.circle.deg!).toBeCloseTo(90, 3)
+    expect(arc.tape).toMatch(/ARC/)
+  })
+
+  it('rem uses Jobber getFIS truncation path', () => {
+    const eng = new CalcEngine()
+    // Jobber help example path: length ÷ 9 → rem via getFIS
+    eng.setMode('INCH')
+    for (const d of String(125).split('')) eng.inputDigit(Number(d))
+    eng.inputDecimalPoint()
+    eng.inputDigit(5)
+    eng.setOperator('/')
+    eng.inputDigit(9)
+    eng.equals()
+    eng.remainderHint()
+    // Jobber: rem is small positive trim (often 1/16")
+    expect(eng.getValue().toInches()).toBeGreaterThanOrEqual(0)
+    expect(eng.getValue().toInches()).toBeLessThan(1)
+  })
+
+  it('pitch ratio <1 accepted as Jobber rise/run → stored /12', () => {
+    const bags = new ModeBags()
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(0.5), 'DEC', bags, {})
+    expect(bags.roof.pitch).toBeCloseTo(6, 8)
   })
 })
