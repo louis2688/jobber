@@ -10,7 +10,7 @@ import { handleProgramKey, ModeBags } from './modeSolvers.ts'
 import type { CalcProgram, FnKeyId } from './programs.ts'
 import { MemoryBank, MEMORY_SLOT_COUNT } from './memory.ts'
 
-export type Operator = '+' | '-' | '*' | '/'
+export type Operator = '+' | '-' | '*' | '/' | '%'
 
 export interface TapeEntry {
   id: number
@@ -59,6 +59,8 @@ export class CalcEngine {
   private dmsDisplay: string | null = null
   private lastTriangle: TriangleState | null = null
   private bags = new ModeBags()
+  /** Remainder from last FIS-style divide (Jobber rem key). */
+  private lastRemainder: Dimension | null = null
   program: CalcProgram = 'triangle'
 
   getDisplay(): string {
@@ -156,7 +158,14 @@ export class CalcEngine {
 
   remainderHint(): void {
     this.error = null
-    this.pushTape('rem (MVP: use / for divide)')
+    if (!this.lastRemainder) {
+      this.pushTape('rem (divide first)')
+      return
+    }
+    this.value = this.lastRemainder
+    this.entering = false
+    this.entry.loadFromDimension(this.value)
+    this.pushTape(`rem ${this.value.format(this.mode)}`)
   }
 
   dmsinHint(): void {
@@ -245,6 +254,22 @@ export class CalcEngine {
   private commitPending(): void {
     const rhs = this.getValue()
     if (this.pendingOp && this.pendingValue) {
+      if (this.pendingOp === '/') {
+        // Jobber rem: leftover so n × quot + rem = original (dimensionless divisor)
+        const dividend = this.pendingValue
+        const divisor = scalarOperand(rhs, this.mode)
+        if (divisor !== 0) {
+          const q = dividend.divide(divisor)
+          // rem in same unit inches: original − quot×divisor (quot truncated to 1/16" for FIS)
+          const quotIn = q.toInches()
+          const trunc =
+            this.mode === 'FIS'
+              ? Math.trunc(quotIn * 16) / 16
+              : quotIn
+          const remIn = dividend.toInches() - trunc * divisor
+          this.lastRemainder = Dimension.fromInches(remIn)
+        }
+      }
       this.value = applyOp(this.pendingValue, this.pendingOp, rhs, this.mode)
       this.pendingOp = null
       this.pendingValue = null
@@ -437,13 +462,28 @@ export class CalcEngine {
       if (result.clearTriangle) {
         this.triangle = emptyTriangle()
         this.triangleInputs = {}
+        // Keep lastTriangle so ReTR can restore the previous solve.
       }
       if (result.triangleInputs) {
         this.triangleInputs = result.triangleInputs
       }
       if (result.triangle) {
         this.triangle = result.triangle
-        this.lastTriangle = result.triangle
+        if (!result.clearTriangle) {
+          this.lastTriangle = result.triangle
+        }
+      }
+      if (result.setPercent) {
+        this.commitPending()
+        const base = result.value ?? this.getValue()
+        this.pendingValue = base
+        this.pendingOp = '%'
+        this.value = base
+        this.entering = false
+        this.entry.loadFromDimension(base)
+        this.dmsDisplay = null
+        this.pushTape(result.tape)
+        return
       }
       if (result.forceDec) {
         this.mode = 'DEC'
@@ -480,6 +520,9 @@ function applyOp(a: Dimension, op: Operator, b: Dimension, mode: DisplayMode): D
       return a.multiply(scalarOperand(b, mode))
     case '/':
       return a.divide(scalarOperand(b, mode))
+    case '%':
+      // Jobber setpercent: x × (y/100)
+      return a.multiply(scalarOperand(b, mode) / 100)
   }
 }
 
@@ -506,6 +549,8 @@ function opLabel(op: Operator): string {
       return 'x'
     case '/':
       return '/'
+    case '%':
+      return '%'
   }
 }
 

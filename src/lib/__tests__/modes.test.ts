@@ -83,12 +83,14 @@ describe('6 Jobber programs', () => {
     ).toThrow(/riserH/)
   })
 
-  it('stairs: stringer from FL-FL + Run', () => {
+  it('stairs: stringer = √(riser²+tread²)×(steps−1) (Jobber)', () => {
     const bags = new ModeBags()
-    handleProgramKey('stairs', 'rise', Dimension.fromInches(96), 'INCH', bags, {})
-    handleProgramKey('stairs', 'run', Dimension.fromInches(120), 'INCH', bags, {})
+    handleProgramKey('stairs', 'pitch', Dimension.fromInches(7), 'INCH', bags, {})
+    handleProgramKey('stairs', 'deg', Dimension.fromInches(10), 'INCH', bags, {})
+    handleProgramKey('stairs', 'rise', Dimension.fromInches(98), 'INCH', bags, {})
     const str = handleProgramKey('stairs', 'slp', Dimension.zero(), 'INCH', bags, {})
-    expect(str.value!.toInches()).toBeCloseTo(Math.hypot(96, 120), 5)
+    expect(bags.stairs.steps).toBe(14)
+    expect(str.value!.toInches()).toBeCloseTo(Math.hypot(7, 10) * 13, 5)
   })
 
   it('roof: pitch + run → rise/slope and regular HIP', () => {
@@ -97,7 +99,10 @@ describe('6 Jobber programs', () => {
     handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
     expect(bags.roof.rise!.toInches()).toBeCloseTo(72, 5)
     const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
-    expect(hip.value!.toInches()).toBeCloseTo(bags.roof.slope!.toInches() * Math.SQRT2, 5)
+    expect(hip.value!.toInches()).toBeCloseTo(
+      Math.sqrt(bags.roof.slope!.toInches() ** 2 + bags.roof.run!.toInches() ** 2),
+      5,
+    )
   })
 
   it('roof: irregular HIP with pitch2', () => {
@@ -239,11 +244,12 @@ describe('depth helpers', () => {
     expect(r.value!.toInches()).toBeCloseTo(36, 5)
   })
 
-  it('stairs: nose reduces effective tread for pitch', () => {
+  it('stairs: nose is nose-to-nose √(riser²+tread²); pitch = riser/tread×12', () => {
     const bags = new ModeBags()
     handleProgramKey('stairs', 'pitch', Dimension.fromInches(7), 'INCH', bags, {})
-    handleProgramKey('stairs', 'deg', Dimension.fromInches(11), 'INCH', bags, {})
-    handleProgramKey('stairs', 'help', Dimension.fromInches(1), 'INCH', bags, {})
+    handleProgramKey('stairs', 'deg', Dimension.fromInches(10), 'INCH', bags, {})
+    const nose = handleProgramKey('stairs', 'help', Dimension.zero(), 'INCH', bags, {})
+    expect(nose.value!.toInches()).toBeCloseTo(Math.hypot(7, 10), 5)
     const pitch = handleProgramKey('stairs', 'dmsin', Dimension.zero(), 'DEC', bags, {})
     expect(pitch.value!.toFeet()).toBeCloseTo((7 / 10) * 12, 5)
   })
@@ -256,12 +262,13 @@ describe('depth helpers', () => {
     ).toThrow(/riserH/)
   })
 
-  it('stairs: platform steps=1 stringer equals FL-FL', () => {
+  it('stairs: platform steps=1 stringer is 0 (Jobber ×0 treads)', () => {
     const bags = new ModeBags()
-    handleProgramKey('stairs', 'rise', Dimension.fromInches(8), 'INCH', bags, {})
+    handleProgramKey('stairs', 'pitch', Dimension.fromInches(8), 'INCH', bags, {})
+    handleProgramKey('stairs', 'deg', Dimension.fromInches(10), 'INCH', bags, {})
     handleProgramKey('stairs', 'area', Dimension.fromFeet(1), 'DEC', bags, {})
     const str = handleProgramKey('stairs', 'slp', Dimension.zero(), 'INCH', bags, {})
-    expect(str.value!.toInches()).toBeCloseTo(8, 5)
+    expect(str.value!.toInches()).toBeCloseTo(0, 5)
     expect(str.tape).toMatch(/platform/)
   })
 
@@ -294,8 +301,9 @@ describe('depth helpers', () => {
 
   it('stairs: steep stringer notes headroom', () => {
     const bags = new ModeBags()
+    handleProgramKey('stairs', 'pitch', Dimension.fromInches(10), 'INCH', bags, {})
+    handleProgramKey('stairs', 'deg', Dimension.fromInches(8), 'INCH', bags, {})
     handleProgramKey('stairs', 'rise', Dimension.fromInches(120), 'INCH', bags, {})
-    handleProgramKey('stairs', 'run', Dimension.fromInches(80), 'INCH', bags, {})
     const str = handleProgramKey('stairs', 'slp', Dimension.zero(), 'INCH', bags, {})
     expect(str.tape).toMatch(/headroom/)
   })
@@ -326,5 +334,72 @@ describe('depth helpers', () => {
     eng.inputDigit(0)
     eng.handleProgramFn('dmsin')
     expect(eng.getSnapshot().dmsDisplay).toMatch(/45°/)
+  })
+})
+
+describe('Jobber oracle alignment (jt.js)', () => {
+  it('stairs: FL-FL/riser ceils fractional step count', () => {
+    const bags = new ModeBags()
+    handleProgramKey('stairs', 'rise', Dimension.fromInches(100), 'INCH', bags, {})
+    handleProgramKey('stairs', 'pitch', Dimension.fromInches(7.5), 'INCH', bags, {})
+    // 100/7.5 = 13.333… → Jobber ceil → 14 (not Math.round → 13)
+    expect(bags.stairs.steps).toBe(14)
+    expect(bags.stairs.riserH!.toInches()).toBeCloseTo(100 / 14, 5)
+  })
+
+  it('roof HIP = √(common² + run²) not common×√2', () => {
+    const bags = new ModeBags()
+    handleProgramKey('roof', 'pitch', Dimension.fromFeet(6), 'DEC', bags, {})
+    handleProgramKey('roof', 'run', Dimension.fromInches(144), 'INCH', bags, {})
+    const hip = handleProgramKey('roof', 'help', Dimension.zero(), 'INCH', bags, {})
+    const expected = Math.sqrt(bags.roof.slope!.toInches() ** 2 + 144 ** 2)
+    expect(hip.value!.toInches()).toBeCloseTo(expected, 4)
+    expect(hip.value!.toInches()).not.toBeCloseTo(bags.roof.slope!.toInches() * Math.SQRT2, 1)
+  })
+
+  it('technical % is binary op (500 % 10 = → 50)', () => {
+    const eng = new CalcEngine()
+    eng.setProgram('technical')
+    eng.setMode('DEC')
+    eng.inputDigit(5)
+    eng.inputDigit(0)
+    eng.inputDigit(0)
+    eng.handleProgramFn('rise') // %
+    eng.inputDigit(1)
+    eng.inputDigit(0)
+    eng.equals()
+    expect(eng.getValue().toFeet()).toBeCloseTo(50, 8)
+  })
+
+  it('technical SINE then value does asin (Jobber toggle)', () => {
+    const eng = new CalcEngine()
+    eng.setProgram('technical')
+    eng.setMode('DEC')
+    eng.inputDigit(3)
+    eng.inputDigit(0)
+    eng.handleProgramFn('pitch') // sin → 0.5, arm inverse
+    expect(eng.getValue().toFeet()).toBeCloseTo(0.5, 8)
+    eng.handleProgramFn('pitch') // asin(0.5) → 30
+    expect(eng.getValue().toFeet()).toBeCloseTo(30, 5)
+  })
+
+  it('ClrTR preserves ReTR last triangle', () => {
+    const eng = new CalcEngine()
+    eng.setMode('INCH')
+    eng.inputDigit(3)
+    eng.handleProgramFn('rise')
+    eng.inputDigit(4)
+    eng.handleProgramFn('run')
+    eng.handleProgramFn('clrtr')
+    eng.handleProgramFn('retr')
+    expect(eng.getTriangle().slope!.toInches()).toBeCloseTo(5, 8)
+  })
+
+  it('oblique SAS obtuse A matches law of cosines', () => {
+    const bags = new ModeBags()
+    handleProgramKey('oblique', 'pitch', Dimension.fromInches(10), 'INCH', bags, {})
+    handleProgramKey('oblique', 'rise', Dimension.fromInches(3), 'INCH', bags, {})
+    handleProgramKey('oblique', 'slp', Dimension.fromFeet(30), 'DEC', bags, {})
+    expect(bags.oblique.A!).toBeGreaterThan(90)
   })
 })

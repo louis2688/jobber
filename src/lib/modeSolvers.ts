@@ -18,6 +18,8 @@ import {
 export interface ModeResult {
   value?: Dimension
   forceDec?: boolean
+  /** TECHNICAL %: treat as pending binary op (x × y/100), Jobber setpercent */
+  setPercent?: boolean
   tape: string
   /** Optional D°M′S″ annotation for the display bar */
   dmsDisplay?: string
@@ -125,7 +127,15 @@ export class ModeBags {
     jackSide: 1,
   }
 
+  /** TECHNICAL: next SINE/COS is inverse (Jobber toggles after each press). */
+  techInvSin = false
+  techInvCos = false
+
   clear(program: CalcProgram): void {
+    if (program === 'technical') {
+      this.techInvSin = false
+      this.techInvCos = false
+    }
     if (program === 'circle') {
       this.circle = {
         radius: null,
@@ -196,7 +206,7 @@ export function handleProgramKey(
     case 'oblique':
       return handleOblique(key, current, mode, bags, label)
     case 'technical':
-      return handleTechnical(key, current, mode, label)
+      return handleTechnical(key, current, mode, bags, label)
     case 'roof':
       return handleRoof(key, current, mode, bags, label)
   }
@@ -458,9 +468,13 @@ function solveStairs(s: ModeBags['stairs']): void {
 
   if (flfl != null && riser != null && steps == null) {
     if (riser > flfl + 1e-9) throw new Error('riserH > FL-FL')
-    steps = Math.max(1, Math.round(flfl / riser))
+    // Jobber jt.js stair_rise: ceil any fractional rise/riser (via toFixed(1) + dec>0)
+    const ratio = flfl / riser
+    const whole = Math.floor(ratio + 1e-9)
+    const frac = ratio - whole
+    steps = Math.max(1, frac > 1e-9 ? whole + 1 : whole)
     s.steps = steps
-    // Actual riser from rounded step count
+    // Actual riser from step count (Jobber: rise / num_steps)
     s.riserH = Dimension.fromInches(flfl / steps)
   }
   if (flfl != null && steps != null && riser == null) {
@@ -538,23 +552,28 @@ function handleStairs(
     return { value: current, tape: `Run <- ${current.format(mode)}` }
   }
   if (key === 'help') {
-    s.nose = current
-    return { value: current, tape: `nose <- ${current.format(mode)}` }
+    // Jobber "nose": nose-to-nose length of a single step = √(riser²+tread²)
+    solveStairs(s)
+    const rise = s.riserH?.toInches()
+    const tread = s.trdWth?.toInches()
+    if (rise == null || tread == null) throw new Error('Need riserH & trdWth')
+    const n2n = Math.hypot(rise, tread)
+    s.nose = Dimension.fromInches(n2n)
+    return {
+      value: s.nose,
+      tape: `nose ${s.nose.format(mode)} (√riser²+trd²)`,
+    }
   }
   if (key === 'clrtr') {
     solveStairs(s)
-    // 1st step height = riser (or FL-FL/steps); tape notes unit rise/run summary
+    // Jobber 1st step ≈ riser (plus FIS remainder trim); we show unit riser
     const v = s.riserH ?? current
     const tread = s.trdWth
-    const nose = s.nose?.toInches() ?? 0
     const stepsNote =
       s.steps != null
         ? `; ${s.steps} risers / ${Math.max(0, s.steps - 1)} treads`
         : ''
-    const treadNote =
-      tread != null
-        ? `; tread ${tread.format(mode)}${nose > 0 ? ` − nose ${nose.toFixed(3)}"` : ''}`
-        : ''
+    const treadNote = tread != null ? `; tread ${tread.format(mode)}` : ''
     return {
       value: v,
       tape: `1stStp ${v.format(mode)}${stepsNote}${treadNote}`,
@@ -562,18 +581,22 @@ function handleStairs(
   }
   if (key === 'slp') {
     solveStairs(s)
-    const rise = s.flfl?.toInches()
-    const run = s.run?.toInches()
-    if (rise == null || run == null) throw new Error('Need FL-FL & Run')
-    if (s.steps === 1 && run === 0) {
+    // Jobber stringer = √(riser²+tread²)×(steps−1) — not √(FL-FL²+Run²)
+    const rise = s.riserH?.toInches()
+    const tread = s.trdWth?.toInches()
+    const steps = s.steps
+    if (rise == null || tread == null || steps == null) {
+      throw new Error('Need riserH, trdWth & steps')
+    }
+    if (steps === 1) {
       return {
-        value: Dimension.fromInches(rise),
-        tape: `stringr ${Dimension.fromInches(rise).format(mode)} (platform)`,
+        value: Dimension.zero(),
+        tape: `stringr 0 (platform / single riser)`,
       }
     }
-    const str = Math.hypot(rise, run)
-    // Rough headroom flag: steep stairs (>45°) often need careful clearance
-    const ang = run > 0 ? rad2deg(Math.atan(rise / run)) : 90
+    const unit = Math.hypot(rise, tread)
+    const str = unit * (steps - 1)
+    const ang = rad2deg(Math.atan(rise / tread))
     const headNote =
       ang > 42 ? ` ⚠ steep ${ang.toFixed(1)}° — check headroom` : ''
     return {
@@ -586,15 +609,12 @@ function handleStairs(
     const rise = s.riserH?.toInches()
     const tread = s.trdWth?.toInches()
     if (rise == null || tread == null) throw new Error('Need riserH & trdWth')
-    const nose = s.nose?.toInches() ?? 0
-    const eff = tread - nose
-    if (eff <= 0) throw new Error('trdWth − nose must be > 0')
-    const pitch = (rise / eff) * 12
-    const noseNote = nose > 0 ? ` (eff tread ${eff.toFixed(3)}")` : ''
+    // Jobber pitch = riser/tread (ratio); we display construction rise-per-12
+    const pitch = (rise / tread) * 12
     return {
       value: Dimension.fromFeet(pitch),
       forceDec: true,
-      tape: `pitch ${pitch.toFixed(4)}/12${noseNote}`,
+      tape: `pitch ${pitch.toFixed(4)}/12`,
     }
   }
   if (key === 'retr') {
@@ -602,10 +622,7 @@ function handleStairs(
     const rise = s.riserH?.toInches()
     const tread = s.trdWth?.toInches()
     if (rise == null || tread == null) throw new Error('Need riserH & trdWth')
-    const nose = s.nose?.toInches() ?? 0
-    const eff = tread - nose
-    if (eff <= 0) throw new Error('trdWth − nose must be > 0')
-    const ang = rad2deg(Math.atan(rise / eff))
+    const ang = rad2deg(Math.atan(rise / tread))
     const parts = decimalToDms(ang)
     return {
       value: Dimension.fromFeet(ang),
@@ -656,11 +673,13 @@ function solveOblique(o: ModeBags['oblique']): void {
     return
   }
 
-  // SAS: a, b, C → c
+  // SAS: a, b, C → c (law of cosines for side + angles; asin would flip obtuse A)
   if (a != null && b != null && C != null && c == null) {
     c = Math.sqrt(a * a + b * b - 2 * a * b * Math.cos(deg2rad(C)))
     o.c = Dimension.fromInches(c)
-    A = rad2deg(Math.asin(Math.min(1, Math.max(-1, (a * Math.sin(deg2rad(C))) / c))))
+    A = rad2deg(
+      Math.acos(Math.min(1, Math.max(-1, (b * b + c * c - a * a) / (2 * b * c)))),
+    )
     B = 180 - C - A
     o.A = A
     o.B = B
@@ -801,21 +820,65 @@ function handleTechnical(
   key: FnKeyId,
   current: Dimension,
   mode: DisplayMode,
+  bags: ModeBags,
   label: string,
 ): ModeResult {
   const n = numFromDim(current, mode)
 
   if (key === 'pitch') {
+    // Jobber: empty/0 toggles Inv. SINE; value computes sin or asin then toggles
+    if (n === 0) {
+      bags.techInvSin = !bags.techInvSin
+      return {
+        value: Dimension.zero(),
+        forceDec: true,
+        tape: bags.techInvSin ? 'Inv. SINE mode' : 'SINE mode',
+      }
+    }
+    if (bags.techInvSin) {
+      if (Math.abs(n) > 1) throw new Error('asin domain |x|≤1')
+      const v = rad2deg(Math.asin(n))
+      bags.techInvSin = false
+      return {
+        value: Dimension.fromFeet(v),
+        forceDec: true,
+        tape: `asin(${n})=${v.toFixed(4)}°`,
+      }
+    }
     const v = Math.sin(deg2rad(n))
+    bags.techInvSin = true
     return { value: Dimension.fromFeet(v), forceDec: true, tape: `SIN(${n})=${v.toFixed(6)}` }
   }
   if (key === 'deg') {
+    if (n === 0) {
+      bags.techInvCos = !bags.techInvCos
+      return {
+        value: Dimension.zero(),
+        forceDec: true,
+        tape: bags.techInvCos ? 'Inv. COS mode' : 'COS mode',
+      }
+    }
+    if (bags.techInvCos) {
+      if (Math.abs(n) > 1) throw new Error('acos domain |x|≤1')
+      const v = rad2deg(Math.acos(n))
+      bags.techInvCos = false
+      return {
+        value: Dimension.fromFeet(v),
+        forceDec: true,
+        tape: `acos(${n})=${v.toFixed(4)}°`,
+      }
+    }
     const v = Math.cos(deg2rad(n))
+    bags.techInvCos = true
     return { value: Dimension.fromFeet(v), forceDec: true, tape: `COS(${n})=${v.toFixed(6)}` }
   }
   if (key === 'rise') {
-    const v = n / 100
-    return { value: dimFromModeNumber(v, mode), forceDec: mode === 'DEC', tape: `% ${v}` }
+    // Jobber setpercent: pending binary op x × (y/100)
+    return {
+      value: current,
+      setPercent: true,
+      tape: `${current.format(mode)} %`,
+    }
   }
   if (key === 'area') {
     if (n === 0) throw new Error('Divide by zero')
@@ -858,7 +921,7 @@ function handleTechnical(
 
 /**
  * Roof helpers (MVP+ practical, not full Jobber Instruments clone):
- * - Regular HIP ≈ common slope × √2 (square plan, equal pitches)
+ * - Regular HIP = √(common² + run²) = √(rise² + 2·run²) (Jobber jt.js square plan)
  * - Irregular HIP/VALLEY: pitch + pitch2 + run on primary side,
  *   rise = run×p1/12; run2 = rise×12/p2; hip/val = √(run²+run2²+rise²)
  *   (same intersection length; secondary common = √(run2²+rise²))
@@ -1011,12 +1074,17 @@ function handleRoof(
         tape: `HIP/VAL irr ${Dimension.fromInches(irr.hipVal).format(mode)} (p ${r.pitch}/12·p2 ${r.pitch2}/12; run2 ${Dimension.fromInches(irr.run2).format(mode)}; SLP2 ${Dimension.fromInches(irr.common2).format(mode)}; DEG 0=toggle jack side)`,
       }
     }
-    if (!r.slope) throw new Error('Need Rise/Run or Pitch+Run')
-    // Regular square hip/valley approximation
-    const hip = r.slope.toInches() * Math.SQRT2
+    if (!r.slope || !r.run) throw new Error('Need Rise/Run or Pitch+Run')
+    // Jobber: hip_length = √(common² + run²) = √(rise² + 2·run²) for square plan
+    const hip = Math.sqrt(r.slope.toInches() ** 2 + r.run.toInches() ** 2)
+    const hipPitch = r.rise
+      ? (r.rise.toInches() / Math.sqrt(hip * hip - r.rise.toInches() ** 2)) * 12
+      : null
+    const hipNote =
+      hipPitch != null ? `; hip pitch ${hipPitch.toFixed(4)}/12` : ''
     return {
       value: Dimension.fromInches(hip),
-      tape: `HIP/VAL ${Dimension.fromInches(hip).format(mode)} (×√2)`,
+      tape: `HIP/VAL ${Dimension.fromInches(hip).format(mode)}${hipNote}`,
     }
   }
 
