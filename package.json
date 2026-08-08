@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run excel:build && node scripts/copy-excel-dist.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "excel:dev": "npm --prefix excel-addin run dev",
+    "excel:build": "npm --prefix excel-addin run build",
+    "excel:install": "npm --prefix excel-addin install"
   },
   "dependencies": {
     "react": "^19.2.8",

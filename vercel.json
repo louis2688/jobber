@@ -1,0 +1,14 @@
+{
+  "installCommand": "npm install && npm --prefix excel-addin install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": null,
+  "rewrites": [
+    { "source": "/excel", "destination": "/excel/index.html" },
+    { "source": "/excel/", "destination": "/excel/index.html" },
+    {
+      "source": "/((?!excel/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -23,3 +23,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+excel-addin/node_modules
+
+excel-addin/dist
+
+.vercel
+.env*

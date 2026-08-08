@@ -15,8 +15,8 @@ export type KeyAction =
   | { type: 'ce' }
   | { type: 'mode'; mode: 'FIS' | 'DEC' | 'INCH' | 'MET' }
   | { type: 'cycleProgram' }
-  | { type: 'memRecall' }
-  | { type: 'memStore' }
+  | { type: 'memRecall'; slot?: number }
+  | { type: 'memStore'; slot?: number }
   | { type: 'memClear' }
   | { type: 'tri'; field: 'rise' | 'run' | 'pitch' | 'slope' | 'deg' | 'area' }
   | { type: 'clrTri' }

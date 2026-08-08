@@ -8,6 +8,7 @@ import {
 } from './triangle.ts'
 import { handleProgramKey, ModeBags } from './modeSolvers.ts'
 import type { CalcProgram, FnKeyId } from './programs.ts'
+import { MemoryBank, MEMORY_SLOT_COUNT } from './memory.ts'
 
 export type Operator = '+' | '-' | '*' | '/'
 
@@ -19,7 +20,11 @@ export interface TapeEntry {
 export interface EngineSnapshot {
   mode: DisplayMode
   display: string
+  /** D°M′S″ annotation when last angle action produced one */
+  dmsDisplay: string | null
   memory: string | null
+  memories: (string | null)[]
+  activeMemorySlot: number
   tape: TapeEntry[]
   triangle: TriangleState
   error: string | null
@@ -39,7 +44,7 @@ export class CalcEngine {
   private entering = false
   private pendingOp: Operator | null = null
   private pendingValue: Dimension | null = null
-  private memory: Dimension | null = null
+  private memoryBank = new MemoryBank()
   private tape: TapeEntry[] = []
   private tapeSeq = 0
   private triangle: TriangleState = emptyTriangle()
@@ -51,6 +56,7 @@ export class CalcEngine {
     deg: number
   }> = {}
   private error: string | null = null
+  private dmsDisplay: string | null = null
   private lastTriangle: TriangleState | null = null
   private bags = new ModeBags()
   program: CalcProgram = 'triangle'
@@ -65,7 +71,10 @@ export class CalcEngine {
     return {
       mode: this.mode,
       display: this.getDisplay(),
-      memory: this.memory ? this.memory.format(this.mode) : null,
+      dmsDisplay: this.dmsDisplay,
+      memory: this.memoryBank.primary()?.format(this.mode) ?? null,
+      memories: this.memoryBank.labels(this.mode),
+      activeMemorySlot: this.memoryBank.activeSlot,
       tape: [...this.tape],
       triangle: this.triangle,
       error: this.error,
@@ -86,7 +95,11 @@ export class CalcEngine {
   }
 
   getMemory(): Dimension | null {
-    return this.memory
+    return this.memoryBank.primary()
+  }
+
+  getMemoryBank(): MemoryBank {
+    return this.memoryBank
   }
 
   setMode(mode: DisplayMode): void {
@@ -113,11 +126,12 @@ export class CalcEngine {
 
   dmsinHint(): void {
     this.error = null
-    this.pushTape('DMSin (MVP: enter decimal degrees + DEG)')
+    this.pushTape('DMSin: enter DD.MMSS or D:M:S then press DMSin')
   }
 
   inputDigit(n: number): void {
     this.error = null
+    this.dmsDisplay = null
     this.beginEntry()
     this.entry.inputDigit(n)
   }
@@ -206,23 +220,37 @@ export class CalcEngine {
     this.entry.loadFromDimension(this.value)
   }
 
-  memoryStore(): void {
-    this.memory = this.getValue()
-    this.pushTape(`M<- ${this.memory.format(this.mode)}`)
+  memoryStore(slot?: number): void {
+    const s = slot ?? this.memoryBank.activeSlot
+    const v = this.getValue()
+    this.memoryBank.store(s, v)
+    this.pushTape(`M${s + 1}<- ${v.format(this.mode)}`)
   }
 
-  memoryRecall(): void {
-    if (!this.memory) return
+  memoryRecall(slot?: number): void {
+    const s = slot ?? this.memoryBank.activeSlot
+    const mem = this.memoryBank.recall(s)
+    if (!mem) return
     this.error = null
-    this.value = this.memory
+    this.value = mem
     this.entering = false
     this.entry.loadFromDimension(this.value)
-    this.pushTape(`M-> ${this.value.format(this.mode)}`)
+    this.pushTape(`M${s + 1}-> ${this.value.format(this.mode)}`)
   }
 
-  memoryClear(): void {
-    this.memory = null
-    this.pushTape('M clr')
+  memoryClear(slot?: number): void {
+    if (slot == null) {
+      this.memoryBank.clear()
+      this.pushTape('M clr all')
+      return
+    }
+    this.memoryBank.clear(slot)
+    this.pushTape(`M${slot + 1} clr`)
+  }
+
+  selectMemorySlot(slot: number): void {
+    if (slot < 0 || slot >= MEMORY_SLOT_COUNT) return
+    this.memoryBank.activeSlot = slot
   }
 
   clearTape(): void {
@@ -391,6 +419,7 @@ export class CalcEngine {
         this.entering = false
         this.entry.loadFromDimension(result.value)
       }
+      this.dmsDisplay = result.dmsDisplay ?? null
       this.pushTape(result.tape)
     } catch (e) {
       this.setError(e)

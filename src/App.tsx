@@ -46,10 +46,10 @@ function reducer(state: State, action: KeyAction): State {
       engine.setProgram(program)
       break
     case 'memRecall':
-      engine.memoryRecall()
+      engine.memoryRecall(action.slot)
       break
     case 'memStore':
-      engine.memoryStore()
+      engine.memoryStore(action.slot)
       break
     case 'memClear':
       engine.memoryClear()
@@ -62,7 +62,6 @@ function reducer(state: State, action: KeyAction): State {
     case 'reTri':
     case 'dmsin':
     case 'help':
-      // legacy paths — Keypad now sends fn
       break
     case 'rem':
       engine.remainderHint()
@@ -87,10 +86,16 @@ export default function App() {
           value={snap.display}
           unitMode={snap.mode}
           program={state.program}
-          memory={snap.memory}
+          memories={snap.memories}
+          activeMemorySlot={snap.activeMemorySlot}
           error={snap.error}
+          dmsDisplay={snap.dmsDisplay}
           onClearMem={() => dispatch({ type: 'memClear' })}
-          onRecallMem={() => dispatch({ type: 'memRecall' })}
+          onRecallMem={(slot) => dispatch({ type: 'memRecall', slot })}
+          onStoreMem={(slot) => {
+            state.engine.selectMemorySlot(slot)
+            dispatch({ type: 'memStore', slot })
+          }}
         />
         <Keypad
           program={state.program}
@@ -102,6 +107,10 @@ export default function App() {
               state.program === 'triangle'
             ) {
               setHelpOpen(true)
+              return
+            }
+            if (action.type === 'memStore' && action.slot == null) {
+              dispatch({ type: 'memStore', slot: snap.activeMemorySlot })
               return
             }
             dispatch(action)
@@ -133,7 +142,18 @@ export default function App() {
                 <li key={t}>{t}</li>
               ))}
             </ul>
-            <p>Yellow keys change with each mode. Current: <b>{PROGRAM_TITLE[state.program]}</b></p>
+            <p>
+              Memory: tap a blue/dark cell to recall that slot. Right-click (or
+              long-press) a cell to store. <b>MEM↓</b> stores into the active slot.
+            </p>
+            <p>
+              DMSin: enter <b>DD.MMSS</b> (e.g. 45.3015 = 45°30′15″) or use DEG,
+              then press DMSin.
+            </p>
+            <p>
+              Yellow keys change with each mode. Current:{' '}
+              <b>{PROGRAM_TITLE[state.program]}</b>
+            </p>
             <button type="button" onClick={() => setHelpOpen(false)}>
               Close
             </button>

@@ -5,53 +5,69 @@ interface DisplayProps {
   value: string
   unitMode: DisplayMode
   program: CalcProgram
-  memory: string | null
+  memories: (string | null)[]
+  activeMemorySlot: number
   error: string | null
+  dmsDisplay?: string | null
   onClearMem: () => void
-  onRecallMem: () => void
+  onRecallMem: (slot: number) => void
+  onStoreMem: (slot: number) => void
 }
+
+/** Jobber mem layout: blue store/recall cells + dark secondary cells + clear. */
+const SLOT_TONES: Array<'blue' | 'dark'> = ['blue', 'dark', 'dark', 'blue', 'dark']
 
 export function Display({
   value,
-  unitMode,
+  unitMode: _unitMode,
   program,
-  memory,
+  memories,
+  activeMemorySlot,
   error,
+  dmsDisplay,
   onClearMem,
   onRecallMem,
+  onStoreMem,
 }: DisplayProps) {
+  void _unitMode
   const main = error ?? value
-  const zeroFis =
-    unitMode === 'FIS' ? '0 ft. : 0 : 0/16 inch' : main
-  const memShown = memory ?? '0'
 
   return (
     <>
       <div className="mode-bar">
         <div className="mode-bar-cell">{PROGRAM_TITLE[program]}</div>
-        <div className="mode-bar-cell right disp-main">{main}</div>
+        <div className="mode-bar-cell right disp-main">
+          <span className="disp-main-value">{main}</span>
+          {dmsDisplay && !error ? (
+            <span className="disp-dms" title="Degrees ° Minutes ′ Seconds ″">
+              {dmsDisplay}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="display-stack" data-error={error ? 'true' : 'false'}>
-        <button type="button" className="disp-cell disp-blue" onClick={onRecallMem}>
-          <span className="disp-value">{memShown}</span>
-          <span className="disp-icon" aria-hidden>▲</span>
-        </button>
-        <div className="disp-cell disp-dark">
-          <span className="disp-value">{zeroFis}</span>
-          <span className="disp-icon" aria-hidden>▼</span>
-        </div>
-        <div className="disp-cell disp-dark">
-          <span className="disp-value">{zeroFis}</span>
-          <span className="disp-icon" aria-hidden>▼</span>
-        </div>
-        <button type="button" className="disp-cell disp-blue" onClick={onRecallMem}>
-          <span className="disp-value">{memory ? memShown : '0'}</span>
-          <span className="disp-icon" aria-hidden>▲</span>
-        </button>
-        <div className="disp-cell disp-dark">
-          <span className="disp-value">{zeroFis}</span>
-          <span className="disp-icon" aria-hidden>▼</span>
-        </div>
+        {SLOT_TONES.map((tone, slot) => {
+          const label = memories[slot] ?? '0'
+          const active = activeMemorySlot === slot
+          return (
+            <button
+              key={slot}
+              type="button"
+              className={`disp-cell disp-${tone}${active ? ' disp-active' : ''}`}
+              title={`Memory ${slot + 1}: tap recall, long-press not needed — MEM↓ stores active`}
+              onClick={() => onRecallMem(slot)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                onStoreMem(slot)
+              }}
+            >
+              <span className="disp-value">{label}</span>
+              <span className="disp-icon" aria-hidden>
+                {tone === 'blue' ? '▲' : '▼'}
+              </span>
+            </button>
+          )
+        })}
         <button type="button" className="clear-mem" onClick={onClearMem}>
           clear mem
           <span aria-hidden>×</span>

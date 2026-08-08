@@ -1,0 +1,67 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Helvetica, Arial, sans-serif;
+  background: #222;
+  color: #fff;
+}
+.pane { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+h1 { margin: 0; font-size: 1rem; }
+.mode-btn {
+  border: 1px solid #b8b8b8;
+  background: linear-gradient(#fff, #e8e8e8);
+  color: #2f3e46;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.display {
+  background: linear-gradient(#3c3c3c, #111);
+  border: 1px solid #111;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  text-align: right;
+  font-weight: 700;
+  min-height: 2.4rem;
+}
+.unit-row, .fn-grid, .pad, .ops {
+  display: grid;
+  gap: 4px;
+}
+.unit-row { grid-template-columns: repeat(4, 1fr); }
+.fn-grid { grid-template-columns: repeat(5, 1fr); }
+.pad { grid-template-columns: repeat(3, 1fr); }
+.ops { grid-template-columns: repeat(3, 1fr); }
+button {
+  appearance: none;
+  border: 1px solid #111;
+  border-radius: 8px;
+  background: linear-gradient(#444, #2d2d2d);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.45rem 0.2rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.unit-row button.active,
+.ops button:last-child {
+  background: linear-gradient(#5f9cc5, #396b9e);
+  border-color: #044062;
+}
+.fn-grid button {
+  background: linear-gradient(#ffe155, #f4c63f);
+  color: #222;
+  border-color: #f4c63f;
+}
+.insert {
+  background: linear-gradient(#5f9cc5, #396b9e) !important;
+  border-color: #044062 !important;
+  padding: 0.7rem !important;
+  font-size: 0.9rem !important;
+}
+.status { margin: 0; font-size: 0.75rem; color: #aaa; }
+.hint { margin: 0; font-size: 0.65rem; color: #666; }
+code { color: #9cf; }
