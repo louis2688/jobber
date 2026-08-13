@@ -26,7 +26,7 @@ export type KeyAction =
   | { type: 'rem' }
   | { type: 'fn'; id: FnKeyId }
 
-type KeyTone = 'digit' | 'blue' | 'red' | 'yellow' | 'white'
+type KeyTone = 'digit' | 'digit-wide' | 'blue' | 'op' | 'red' | 'yellow' | 'white'
 
 interface KeyDef {
   id: string
@@ -39,17 +39,17 @@ interface KeyDef {
 const KEYS: KeyDef[] = [
   { id: 'mode', label: 'mode', tone: 'white', action: { type: 'cycleProgram' } },
   { id: 'mem', label: 'MEM↓', tone: 'blue', action: { type: 'memStore' } },
-  { id: '13', label: '13', tone: 'digit', action: { type: 'digit', n: 13 } },
-  { id: '14', label: '14', tone: 'digit', action: { type: 'digit', n: 14 } },
-  { id: '15', label: '15', tone: 'digit', action: { type: 'digit', n: 15 } },
+  { id: '13', label: '13', tone: 'digit-wide', action: { type: 'digit', n: 13 } },
+  { id: '14', label: '14', tone: 'digit-wide', action: { type: 'digit', n: 14 } },
+  { id: '15', label: '15', tone: 'digit-wide', action: { type: 'digit', n: 15 } },
   { id: 'dec', label: 'DEC', tone: 'red', action: { type: 'mode', mode: 'DEC' } },
   { id: 'fis', label: 'FIS', tone: 'red', action: { type: 'mode', mode: 'FIS' } },
 
   { id: 'pitch', label: 'fn', fnId: 'pitch', tone: 'fn', action: { type: 'fn', id: 'pitch' } },
   { id: 'deg', label: 'fn', fnId: 'deg', tone: 'fn', action: { type: 'fn', id: 'deg' } },
-  { id: '10', label: '10', tone: 'digit', action: { type: 'digit', n: 10 } },
-  { id: '11', label: '11', tone: 'digit', action: { type: 'digit', n: 11 } },
-  { id: '12', label: '12', tone: 'digit', action: { type: 'digit', n: 12 } },
+  { id: '10', label: '10', tone: 'digit-wide', action: { type: 'digit', n: 10 } },
+  { id: '11', label: '11', tone: 'digit-wide', action: { type: 'digit', n: 11 } },
+  { id: '12', label: '12', tone: 'digit-wide', action: { type: 'digit', n: 12 } },
   { id: 'ce', label: 'CE/C', tone: 'blue', action: { type: 'ce' } },
   { id: 'inch', label: 'INCH', tone: 'red', action: { type: 'mode', mode: 'INCH' } },
 
@@ -74,16 +74,16 @@ const KEYS: KeyDef[] = [
   { id: '1', label: '1', tone: 'digit', action: { type: 'digit', n: 1 } },
   { id: '2', label: '2', tone: 'digit', action: { type: 'digit', n: 2 } },
   { id: '3', label: '3', tone: 'digit', action: { type: 'digit', n: 3 } },
-  { id: 'div', label: '/', tone: 'blue', action: { type: 'op', op: '/' } },
-  { id: 'mul', label: 'X', tone: 'blue', action: { type: 'op', op: '*' } },
+  { id: 'div', label: '/', tone: 'op', action: { type: 'op', op: '/' } },
+  { id: 'mul', label: 'X', tone: 'op', action: { type: 'op', op: '*' } },
 
   { id: 'help', label: 'fn', fnId: 'help', tone: 'fn', action: { type: 'fn', id: 'help' } },
   { id: 'clrtr', label: 'fn', fnId: 'clrtr', tone: 'fn', action: { type: 'fn', id: 'clrtr' } },
   { id: 'dot', label: '.', tone: 'digit', action: { type: 'dot' } },
   { id: '0', label: '0', tone: 'digit', action: { type: 'digit', n: 0 } },
-  { id: 'add', label: '+', tone: 'blue', action: { type: 'op', op: '+' } },
-  { id: 'sub', label: '−', tone: 'blue', action: { type: 'op', op: '-' } },
-  { id: 'eq', label: '=', tone: 'blue', action: { type: 'equals' } },
+  { id: 'add', label: '+', tone: 'op', action: { type: 'op', op: '+' } },
+  { id: 'sub', label: '−', tone: 'op', action: { type: 'op', op: '-' } },
+  { id: 'eq', label: '=', tone: 'op', action: { type: 'equals' } },
 ]
 
 interface KeypadProps {
@@ -102,14 +102,27 @@ export function Keypad({ program, activeUnit, onAction }: KeypadProps) {
         const active =
           key.action.type === 'mode' && key.action.mode === activeUnit
 
+        const digitWide = tone === 'digit-wide'
+        const className = [
+          'key',
+          digitWide ? 'key-digit key-digit-wide' : `key-${tone}`,
+          active ? 'active' : '',
+          key.id === 'mode' ? 'key-mode-btn' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+
         return (
           <button
             key={key.id}
             type="button"
-            className={`key key-${tone}${active ? ' active' : ''}${key.id === 'mode' ? ' key-mode-btn' : ''}`}
+            className={className}
+            aria-label={
+              key.action.type === 'digit' ? `Digit ${key.action.n}` : undefined
+            }
             onClick={() => onAction(key.action)}
           >
-            {label}
+            <span className="key-label">{label}</span>
           </button>
         )
       })}
