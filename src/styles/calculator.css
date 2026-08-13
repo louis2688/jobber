@@ -6,10 +6,10 @@
   --key-blue: #396b9e;
   --key-blue-top: #5f9cc5;
   --key-blue-border: #044062;
-  /* Arithmetic ops — distinct from utility blue */
-  --key-op: #c45c12;
-  --key-op-top: #ef8a2f;
-  --key-op-border: #8a3d08;
+  /* Arithmetic ops — Jobber theme-b blue (demo / + − X =) */
+  --key-op: #396b9e;
+  --key-op-top: #5f9cc5;
+  --key-op-border: #044062;
   --key-red: #d51920;
   --key-red-top: #ff1e27;
   --key-red-border: #ed1c24;
