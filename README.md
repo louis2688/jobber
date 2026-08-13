@@ -129,8 +129,9 @@ npm run excel:dev       # HTTPS https://localhost:3000
 ### Production sideload
 
 1. Confirm https://jobberlm.vercel.app/excel/ loads in a browser.
-2. Sideload `excel-addin/manifest.prod.xml` (same Mac/Windows steps as local).
-3. Open **Jobber Calc (Prod)** — pane loads from Vercel; **Insert value** / **Insert table** work inside desktop Excel.
+2. Download the generated manifest: [Jobber-Calculator.xml](https://jobberlm.vercel.app/Jobber-Calculator.xml) (same file as `excel-addin/manifest.prod.xml`).
+3. Sideload that XML into Excel (Mac/Windows steps in [excel-addin/README.md](excel-addin/README.md)).
+4. Open **Jobber Calc (Prod)** — pane loads from Vercel; **Insert value** / **Insert table** work inside desktop Excel.
 
 Full steps: [excel-addin/README.md](excel-addin/README.md).
 

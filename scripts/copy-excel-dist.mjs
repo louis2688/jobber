@@ -14,4 +14,13 @@ if (!existsSync(src)) {
 rmSync(dest, { recursive: true, force: true })
 mkdirSync(dirname(dest), { recursive: true })
 cpSync(src, dest, { recursive: true })
+
+const prodManifest = join(root, 'excel-addin', 'manifest.prod.xml')
+const downloadName = 'Jobber-Calculator.xml'
+if (existsSync(prodManifest)) {
+  cpSync(prodManifest, join(dest, downloadName))
+  cpSync(prodManifest, join(root, 'dist', downloadName))
+  console.log(`Copied excel-addin/manifest.prod.xml → dist/${downloadName} and dist/excel/${downloadName}`)
+}
+
 console.log(`Copied excel-addin/dist → dist/excel`)

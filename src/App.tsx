@@ -151,6 +151,10 @@ export default function App() {
           Field cheat sheet
         </a>
         <span aria-hidden="true">·</span>
+        <a href="/Jobber-Calculator.xml" download="Jobber-Calculator.xml">
+          Excel add-in
+        </a>
+        <span aria-hidden="true">·</span>
         <a
           href="https://github.com/louis2688/jobber"
           target="_blank"
