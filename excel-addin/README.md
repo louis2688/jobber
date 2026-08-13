@@ -44,16 +44,17 @@ npm run dev
 No local server required.
 
 1. Confirm the hosted pane loads: [https://jobberlm.vercel.app/excel/](https://jobberlm.vercel.app/excel/)
-2. Sideload **`manifest.prod.xml`** using the Mac or Windows steps below.
-3. Ribbon button: **Jobber Calc** (display name includes “Prod”).
-4. **Insert value** writes the display string into the active cell.
-5. **Insert table** writes a small range (mode, value, unit, memory, triangle fields, recent tape) starting at the active cell.
+2. Download the generated manifest: [https://jobberlm.vercel.app/Jobber-Calculator.xml](https://jobberlm.vercel.app/Jobber-Calculator.xml) (or use **`manifest.prod.xml`** in this folder).
+3. Sideload that XML using the Mac or Windows steps below.
+4. Ribbon button: **Jobber Calc** (display name includes “Prod”).
+5. **Insert value** writes the display string into the active cell.
+6. **Insert table** writes a small range (mode, value, unit, memory, triangle fields, recent tape) starting at the active cell.
 
 Web calculator (non-Office): [https://jobberlm.vercel.app/](https://jobberlm.vercel.app/)
 
 ## Sideload — Excel on Mac
 
-1. Choose the right manifest (`manifest.xml` for local, `manifest.prod.xml` for prod).
+1. Choose the right manifest (`manifest.xml` for local, or download [Jobber-Calculator.xml](https://jobberlm.vercel.app/Jobber-Calculator.xml) for prod).
 2. For local only: start `npm run excel:dev` and trust https://localhost:3000.
 3. In Excel: **Insert → Add-ins → My Add-ins → Upload My Add-in** (or **Developer → Add-ins**).
 4. Select the manifest file and upload / sideload.
